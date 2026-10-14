@@ -90,7 +90,6 @@ def client():
     app.dependency_overrides.clear()
 
 
-
 _counter = itertools.count(1)
 
 
@@ -269,7 +268,6 @@ def make_audit_log():
 
 @pytest.fixture
 def assert_recent_utc():
-   
 
     def _check(value, seconds=10):
         assert value.tzinfo is not None
