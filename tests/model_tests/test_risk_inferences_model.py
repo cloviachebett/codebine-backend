@@ -5,9 +5,9 @@ import pytest
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import RiskLevel
-from models.emergency_alerts_model import EmergencyAlert
-from models.risk_inferences_model import RiskInference
-from models.risk_reviews_model import RiskReview
+from models.emergency_alerts import EmergencyAlert
+from models.risk_inferences import RiskInference
+from models.risk_reviews import RiskReview
 
 
 def test_new_inference_defaults(

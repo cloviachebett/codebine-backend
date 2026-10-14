@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from models.rainfall_matrices_model import RainfallMatrix
+from models.rainfall_matrices import RainfallMatrix
 
 WINDOWS = ["rain_1day", "rain_3day", "rain_7day", "rain_10day", "rain_30day"]
 

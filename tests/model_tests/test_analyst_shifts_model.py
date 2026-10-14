@@ -4,7 +4,7 @@ from datetime import timedelta
 import pytest
 
 from models._types import utcnow
-from models.analyst_shifts_model import AnalystShift
+from models.analyst_shifts import AnalystShift
 
 
 def test_shift_starts_open_with_check_in_time(db_session, make_user):

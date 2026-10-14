@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import LandslideSeverity
-from models.landslide_inventory_model import LandslideInventory
+from models.landslide_inventory import LandslideInventory
 
 
 def test_landslide_persists_and_reloads(db_session, make_sector, make_landslide):

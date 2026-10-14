@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from models.system_audit_logs_model import SystemAuditLog
+from models.system_audit_logs import SystemAuditLog
 
 
 def test_audit_log_persists_and_reloads(db_session, make_audit_log):
