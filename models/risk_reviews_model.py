@@ -1,29 +1,23 @@
 import uuid
-from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
+    Column,
     DateTime,
     ForeignKey,
     Text,
     UniqueConstraint,
     Uuid,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import relationship
 
-from database import Base
 from models._enums import ReviewDecision
 from models._types import enum_column, utcnow
-
-if TYPE_CHECKING:
-    from models.emergency_alerts_model import EmergencyAlert
-    from models.risk_inferences_model import RiskInference
-    from models.users_model import User
+from database import Base
 
 
 class RiskReview(Base):
-    __tablename__ = "risk_reviews"
+    __tablename__ = "risk_review_table"
     __table_args__ = (
         UniqueConstraint(
             "inference_id", "alert_id", name="uq_risk_reviews_inference_alert"
@@ -35,31 +29,18 @@ class RiskReview(Base):
         ),
     )
 
-    review_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, default=uuid.uuid4
+    review_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    inference_id = Column(
+        Uuid, ForeignKey("risk_inference_table.inference_id"), nullable=True
     )
-    inference_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("risk_inferences.inference_id"), nullable=True
-    )
-    alert_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("emergency_alerts.alert_id"), nullable=True
-    )
-    reviewed_by: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("users.user_id"), nullable=False
-    )
-    decision: Mapped[ReviewDecision] = mapped_column(
+    alert_id = Column(Uuid, ForeignKey("emergency_alert_table.alert_id"), nullable=True)
+    reviewed_by = Column(Uuid, ForeignKey("user_table.user_id"), nullable=False)
+    decision = Column(
         enum_column(ReviewDecision, "review_decision_enum"), nullable=False
     )
-    comments: Mapped[str | None] = mapped_column(Text, nullable=True)
-    reviewed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utcnow
-    )
+    comments = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
 
-    inference: Mapped["RiskInference | None"] = relationship(
-        back_populates="risk_reviews"
-    )
-    alert: Mapped["EmergencyAlert | None"] = relationship(back_populates="risk_reviews")
-    reviewed_by_user: Mapped["User"] = relationship(back_populates="risk_reviews")
-
-    def __repr__(self) -> str:
-        return f"<RiskReview {self.review_id} {self.decision.value}>"
+    inference = relationship("RiskInference", back_populates="risk_reviews")
+    alert = relationship("EmergencyAlert", back_populates="risk_reviews")
+    reviewed_by_user = relationship("User", back_populates="risk_reviews")

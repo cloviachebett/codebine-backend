@@ -1,26 +1,19 @@
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, StatementError
 
-from models import IncidentReport, SystemAuditLog, User
 from models._enums import AccountStatus, UserRole
-from tests.factories import (
-    make_audit_log,
-    make_incident,
-    make_inference,
-    make_review,
-    make_sector,
-    make_user,
-)
-from tests.helpers import assert_recent_utc, count_rows
+from models.incident_reports_model import IncidentReport
+from models.system_audit_logs_model import SystemAuditLog
+from models.users_model import User
 
 
-def test_new_user_defaults_to_active_analyst(session):
+def test_new_user_defaults_to_active_analyst(db_session, make_user, assert_recent_utc):
     user = make_user()
-    session.add(user)
-    session.flush()
+    db_session.add(user)
+    db_session.flush()
 
     assert user.role is UserRole.ANALYST
     assert user.account_status is AccountStatus.ACTIVE
@@ -32,131 +25,143 @@ def test_new_user_defaults_to_active_analyst(session):
     assert_recent_utc(user.created_at)
 
 
-def test_admin_requires_mfa_and_lockout_state():
+def test_admin_requires_mfa_and_lockout_state(make_user):
     admin = make_user(role=UserRole.ADMIN)
     analyst = make_user(role=UserRole.ANALYST)
 
-    admin.locked_until = datetime.now(UTC) + timedelta(minutes=15)
+    admin.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
     assert admin.requires_mfa is True
     assert admin.is_locked is True
     assert analyst.requires_mfa is False
 
 
-def test_email_must_be_unique(session):
-    session.add(make_user(email="ana@example.com"))
-    session.flush()
-    session.add(make_user(email="ana@example.com"))
+def test_email_must_be_unique(db_session, make_user):
+    db_session.add(make_user(email="ana@example.com"))
+    db_session.flush()
+    db_session.add(make_user(email="ana@example.com"))
     with pytest.raises(IntegrityError):
-        session.flush()
+        db_session.flush()
 
 
 @pytest.mark.parametrize("column", ["full_name", "email", "password_hash"])
-def test_required_columns_reject_null(session, column):
-    session.add(make_user(**{column: None}))
+def test_required_columns_reject_null(db_session, column, make_user):
+    db_session.add(make_user(**{column: None}))
     with pytest.raises(IntegrityError):
-        session.flush()
+        db_session.flush()
 
 
-def test_password_hash_is_stored_verbatim(session):
+def test_password_hash_is_stored_verbatim(db_session, make_user):
     hashed = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$aGFzaA"
     user = make_user(password_hash=hashed)
-    session.add(user)
-    session.commit()
-    session.expire_all()
+    db_session.add(user)
+    db_session.commit()
+    db_session.expire_all()
 
-    assert session.get(User, user.user_id).password_hash == hashed
+    assert db_session.get(User, user.user_id).password_hash == hashed
 
 
 @pytest.mark.parametrize("role", list(UserRole))
-def test_every_role_can_be_stored(session, role):
+def test_every_role_can_be_stored(db_session, role, make_user):
     user = make_user(role=role)
-    session.add(user)
-    session.commit()
-    session.expire_all()
-    assert session.get(User, user.user_id).role is role
+    db_session.add(user)
+    db_session.commit()
+    db_session.expire_all()
+    assert db_session.get(User, user.user_id).role is role
 
 
-def test_unknown_role_is_rejected(session):
-    session.add(make_user(role="SUPERUSER"))
+def test_unknown_role_is_rejected(db_session, make_user):
+    db_session.add(make_user(role="SUPERUSER"))
     with pytest.raises(StatementError):
-        session.flush()
+        db_session.flush()
 
 
-def test_last_login_can_be_recorded(session):
+def test_last_login_can_be_recorded(db_session, make_user):
     user = make_user()
-    session.add(user)
-    session.commit()
+    db_session.add(user)
+    db_session.commit()
 
-    login_time = datetime(2026, 10, 13, 18, 30, tzinfo=UTC)
+    login_time = datetime(2026, 10, 13, 18, 30, tzinfo=timezone.utc)
     user.last_login_at = login_time
-    session.commit()
-    session.expire_all()
+    db_session.commit()
+    db_session.expire_all()
 
-    stored = session.get(User, user.user_id).last_login_at
+    stored = db_session.get(User, user.user_id).last_login_at
 
     assert stored.replace(tzinfo=None) == login_time.replace(tzinfo=None)
 
 
-def test_account_can_be_suspended_and_reactivated(session):
+def test_account_can_be_suspended_and_reactivated(db_session, make_user):
     user = make_user()
-    session.add(user)
-    session.commit()
+    db_session.add(user)
+    db_session.commit()
 
     user.account_status = AccountStatus.SUSPENDED
-    session.commit()
-    session.expire_all()
-    assert session.get(User, user.user_id).account_status is AccountStatus.SUSPENDED
+    db_session.commit()
+    db_session.expire_all()
+    assert db_session.get(User, user.user_id).account_status is AccountStatus.SUSPENDED
 
     user.account_status = AccountStatus.ACTIVE
-    session.commit()
-    session.expire_all()
-    assert session.get(User, user.user_id).account_status is AccountStatus.ACTIVE
+    db_session.commit()
+    db_session.expire_all()
+    assert db_session.get(User, user.user_id).account_status is AccountStatus.ACTIVE
 
 
-def test_user_exposes_their_reports_reviews_and_audit_logs(session):
+def test_user_exposes_their_reports_reviews_and_audit_logs(
+    db_session,
+    make_user,
+    make_sector,
+    make_inference,
+    make_incident,
+    make_review,
+    make_audit_log,
+):
     user = make_user()
     sector = make_sector()
     inference = make_inference(sector)
     report = make_incident(sector, reported_by_user=user)
     review = make_review(user, inference=inference)
     log = make_audit_log(user=user)
-    session.add_all([user, report, review, log])
-    session.flush()
+    db_session.add_all([user, report, review, log])
+    db_session.flush()
 
     assert user.incident_reports == [report]
     assert user.risk_reviews == [review]
     assert user.audit_logs == [log]
 
 
-def test_deleting_a_user_keeps_their_audit_logs_and_reports(session):
+def test_deleting_a_user_keeps_their_audit_logs_and_reports(
+    db_session, make_user, make_sector, make_incident, make_audit_log
+):
     user = make_user()
     sector = make_sector()
-    session.add_all(
+    db_session.add_all(
         [
             user,
             make_incident(sector, reported_by_user=user),
             make_audit_log(user=user),
         ]
     )
-    session.commit()
+    db_session.commit()
 
-    session.delete(user)
-    session.commit()
+    db_session.delete(user)
+    db_session.commit()
 
-    log = session.scalars(select(SystemAuditLog)).one()
-    report = session.scalars(select(IncidentReport)).one()
+    log = db_session.scalars(select(SystemAuditLog)).one()
+    report = db_session.scalars(select(IncidentReport)).one()
     assert log.user_id is None
     assert report.reported_by is None
 
 
-def test_a_user_who_made_review_decisions_cannot_be_deleted(session):
+def test_a_user_who_made_review_decisions_cannot_be_deleted(
+    db_session, make_user, make_inference, make_sector, make_review
+):
     user = make_user()
     inference = make_inference(make_sector())
-    session.add_all([user, make_review(user, inference=inference)])
-    session.commit()
+    db_session.add_all([user, make_review(user, inference=inference)])
+    db_session.commit()
 
-    session.delete(user)
+    db_session.delete(user)
     with pytest.raises(IntegrityError):
-        session.commit()
-    session.rollback()
-    assert count_rows(session, User) == 1
+        db_session.commit()
+    db_session.rollback()
+    assert db_session.query(User).count() == 1

@@ -1,26 +1,22 @@
 import uuid
-from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
+    Column,
     Date,
     ForeignKey,
     Numeric,
     UniqueConstraint,
     Uuid,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import relationship
 
 from database import Base
 
-if TYPE_CHECKING:
-    from models.sectors_model import Sector
-
 
 class RainfallMatrix(Base):
-    __tablename__ = "rainfall_matrices"
+    __tablename__ = "rainfall_matrix_table"
     __table_args__ = (
         CheckConstraint(
             "rain_1day >= 0 AND rain_3day >= 0 AND rain_7day >= 0 "
@@ -32,30 +28,13 @@ class RainfallMatrix(Base):
         ),
     )
 
-    rainfall_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, default=uuid.uuid4
-    )
-    sector_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("sectors.sector_id"), nullable=False
-    )
-    observation_date: Mapped[date] = mapped_column(Date, nullable=False)
-    rain_1day: Mapped[Decimal] = mapped_column(
-        Numeric(6, 2), nullable=False, default=Decimal("0.0")
-    )
-    rain_3day: Mapped[Decimal] = mapped_column(
-        Numeric(6, 2), nullable=False, default=Decimal("0.0")
-    )
-    rain_7day: Mapped[Decimal] = mapped_column(
-        Numeric(6, 2), nullable=False, default=Decimal("0.0")
-    )
-    rain_10day: Mapped[Decimal] = mapped_column(
-        Numeric(6, 2), nullable=False, default=Decimal("0.0")
-    )
-    rain_30day: Mapped[Decimal] = mapped_column(
-        Numeric(6, 2), nullable=False, default=Decimal("0.0")
-    )
+    rainfall_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    sector_id = Column(Uuid, ForeignKey("sector_table.sector_id"), nullable=False)
+    observation_date = Column(Date, nullable=False)
+    rain_1day = Column(Numeric(6, 2), nullable=False, default=Decimal("0.0"))
+    rain_3day = Column(Numeric(6, 2), nullable=False, default=Decimal("0.0"))
+    rain_7day = Column(Numeric(6, 2), nullable=False, default=Decimal("0.0"))
+    rain_10day = Column(Numeric(6, 2), nullable=False, default=Decimal("0.0"))
+    rain_30day = Column(Numeric(6, 2), nullable=False, default=Decimal("0.0"))
 
-    sector: Mapped["Sector"] = relationship(back_populates="rainfall_matrices")
-
-    def __repr__(self) -> str:
-        return f"<RainfallMatrix {self.sector_id} {self.observation_date}>"
+    sector = relationship("Sector", back_populates="rainfall_matrices")

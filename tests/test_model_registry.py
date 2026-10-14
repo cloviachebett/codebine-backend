@@ -1,26 +1,27 @@
-from datetime import UTC
+import models
+from datetime import timezone
 
 import pytest
 from sqlalchemy import CheckConstraint, Enum
 from sqlalchemy.orm import configure_mappers
 
-import models
-from database import Base
+
 from models._types import utcnow
+from database import Base
 
 EXPECTED_TABLES = {
-    "analyst_shifts",
-    "emergency_alerts",
-    "incident_reports",
-    "landslide_inventory",
-    "model_versions",
-    "prediction_features",
-    "rainfall_matrices",
-    "risk_inferences",
-    "risk_reviews",
-    "sectors",
-    "system_audit_logs",
-    "users",
+    "analyst_shift_table",
+    "emergency_alert_table",
+    "incident_report_table",
+    "landslide_inventory_table",
+    "model_version_table",
+    "prediction_feature_table",
+    "rainfall_matrix_table",
+    "risk_inference_table",
+    "risk_review_table",
+    "sector_table",
+    "system_audit_log_table",
+    "user_table",
 }
 
 
@@ -66,4 +67,4 @@ def test_every_enum_column_has_a_database_check_constraint():
 
 
 def test_utcnow_is_timezone_aware_utc():
-    assert utcnow().tzinfo == UTC
+    assert utcnow().tzinfo == timezone.utc
