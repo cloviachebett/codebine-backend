@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from models.prediction_features_model import PredictionFeature
+from models.prediction_features import PredictionFeature
 
 
 def test_snapshot_links_both_ways(

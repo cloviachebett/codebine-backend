@@ -4,8 +4,8 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from models._enums import AlertChannel, AlertSeverity, AlertStatus
-from models.emergency_alerts_model import EmergencyAlert
-from models.risk_reviews_model import RiskReview
+from models.emergency_alerts import EmergencyAlert
+from models.risk_reviews import RiskReview
 
 
 def test_new_alert_defaults_to_pending_review(

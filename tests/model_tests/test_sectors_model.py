@@ -6,15 +6,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import GeologyClass
-from models.emergency_alerts_model import EmergencyAlert
-from models.incident_reports_model import IncidentReport
-from models.landslide_inventory_model import LandslideInventory
-from models.prediction_features_model import PredictionFeature
-from models.rainfall_matrices_model import RainfallMatrix
-from models.risk_inferences_model import RiskInference
-from models.risk_reviews_model import RiskReview
-from models.sectors_model import Sector
-from models.users_model import User
+from models.emergency_alerts import EmergencyAlert
+from models.incident_reports import IncidentReport
+from models.landslide_inventory import LandslideInventory
+from models.prediction_features import PredictionFeature
+from models.rainfall_matrices import RainfallMatrix
+from models.risk_inferences import RiskInference
+from models.risk_reviews import RiskReview
+from models.sectors import Sector
+from models.users import User
 
 
 def test_sector_persists_and_reloads(db_session, make_sector):
@@ -39,7 +39,7 @@ def test_sector_persists_and_reloads(db_session, make_sector):
     assert loaded.soil_features == {
         "texture": "sandy loam",
         "layers": [10, 20],
-    }  # Fixed missing arrays
+    }
 
 
 def test_sector_generates_uuid_and_utc_timestamp(

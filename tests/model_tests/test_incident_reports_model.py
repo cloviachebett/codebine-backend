@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import IncidentStatus
-from models.incident_reports_model import IncidentReport
+from models.incident_reports import IncidentReport
 
 
 def test_new_report_defaults_to_submitted(

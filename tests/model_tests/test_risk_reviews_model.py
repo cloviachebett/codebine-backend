@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import ReviewDecision
-from models.risk_reviews_model import RiskReview
+from models.risk_reviews import RiskReview
 
 
 @pytest.fixture

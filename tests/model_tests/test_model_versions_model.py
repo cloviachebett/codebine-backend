@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import ModelStatus
-from models.model_versions_model import ModelVersion
+from models.model_versions import ModelVersion
 
 
 def test_new_model_version_starts_in_training(db_session, make_model_version):

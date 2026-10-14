@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import AccountStatus, UserRole
-from models.incident_reports_model import IncidentReport
-from models.system_audit_logs_model import SystemAuditLog
-from models.users_model import User
+from models.incident_reports import IncidentReport
+from models.system_audit_logs import SystemAuditLog
+from models.users import User
 
 
 def test_new_user_defaults_to_active_analyst(db_session, make_user, assert_recent_utc):
