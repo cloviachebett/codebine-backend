@@ -19,14 +19,12 @@ class IncidentReport(Base):
 
     description = Column(String, nullable=False)
 
-    # create_constraint=True binds check statements directly onto SQLite engine schemas
     status = Column(
         Enum(IncidentStatus, create_constraint=True),
         nullable=False,
         default=IncidentStatus.SUBMITTED,
     )
 
-    # Setting server_default/default to 0.0 satisfies the default property test rules
     latitude = Column(Float, nullable=False, default=0.0, server_default="0.0")
     longitude = Column(Float, nullable=False, default=0.0, server_default="0.0")
 
