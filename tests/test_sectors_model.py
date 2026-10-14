@@ -22,7 +22,10 @@ def test_sector_persists_and_reloads(db_session, make_sector):
         province_name="Western",
         mean_slope_deg=Decimal("31.25"),
         geology_class=GeologyClass.SCHIST,
-        soil_features={"texture": "sandy loam", "layers": [10, 20]}, # Fixed missing arrays
+        soil_features={
+            "texture": "sandy loam",
+            "layers": [10, 20],
+        },  # Fixed missing arrays
     )
     db_session.add(sector)
     db_session.commit()
@@ -33,7 +36,10 @@ def test_sector_persists_and_reloads(db_session, make_sector):
     assert loaded.province_name == "Western"
     assert loaded.mean_slope_deg == Decimal("31.25")
     assert loaded.geology_class is GeologyClass.SCHIST
-    assert loaded.soil_features == {"texture": "sandy loam", "layers": [10, 20]} # Fixed missing arrays
+    assert loaded.soil_features == {
+        "texture": "sandy loam",
+        "layers": [10, 20],
+    }  # Fixed missing arrays
 
 
 def test_sector_generates_uuid_and_utc_timestamp(
