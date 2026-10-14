@@ -9,10 +9,10 @@ from database import Base
 
 
 class LandslideInventory(Base):
-    __tablename__ = "landslide_inventory_table"
+    __tablename__ = "landslide_inventory"
 
     landslide_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
-    sector_id = Column(Uuid, ForeignKey("sector_table.sector_id"), nullable=False)
+    sector_id = Column(Uuid, ForeignKey("sector.sector_id"), nullable=False)
     event_date = Column(Date, nullable=False)
     latitude = Column(Numeric(9, 6), nullable=True)
     longitude = Column(Numeric(9, 6), nullable=True)

@@ -18,7 +18,7 @@ from database import Base
 
 
 class Sector(Base):
-    __tablename__ = "sector_table"
+    __tablename__ = "sector"
     __table_args__ = (
         CheckConstraint("mean_slope_deg >= 0", name="ck_sectors_slope_non_negative"),
         UniqueConstraint(

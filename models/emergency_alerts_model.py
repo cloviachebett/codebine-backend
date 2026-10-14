@@ -9,13 +9,13 @@ from database import Base
 
 
 class EmergencyAlert(Base):
-    __tablename__ = "emergency_alert_table"
+    __tablename__ = "emergency_alert"
 
     alert_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     inference_id = Column(
-        Uuid, ForeignKey("risk_inference_table.inference_id"), nullable=False
+        Uuid, ForeignKey("risk_inference.inference_id"), nullable=False
     )
-    sector_id = Column(Uuid, ForeignKey("sector_table.sector_id"), nullable=False)
+    sector_id = Column(Uuid, ForeignKey("sector.sector_id"), nullable=False)
     alert_message = Column(Text, nullable=False)
     severity = Column(enum_column(AlertSeverity, "alert_severity_enum"), nullable=False)
     channel = Column(enum_column(AlertChannel, "alert_channel_enum"), nullable=False)

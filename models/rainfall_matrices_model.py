@@ -29,7 +29,7 @@ class RainfallMatrix(Base):
     )
 
     rainfall_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
-    sector_id = Column(Uuid, ForeignKey("sector_table.sector_id"), nullable=False)
+    sector_id = Column(Uuid, ForeignKey("sector.sector_id"), nullable=False)
     observation_date = Column(Date, nullable=False)
     rain_1day = Column(Numeric(6, 2), nullable=False, default=Decimal("0.0"))
     rain_3day = Column(Numeric(6, 2), nullable=False, default=Decimal("0.0"))

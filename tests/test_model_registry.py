@@ -5,23 +5,22 @@ import pytest
 from sqlalchemy import CheckConstraint, Enum
 from sqlalchemy.orm import configure_mappers
 
-
 from models._types import utcnow
 from database import Base
 
 EXPECTED_TABLES = {
-    "analyst_shift_table",
-    "emergency_alert_table",
-    "incident_report_table",
-    "landslide_inventory_table",
-    "model_version_table",
-    "prediction_feature_table",
-    "rainfall_matrix_table",
-    "risk_inference_table",
-    "risk_review_table",
-    "sector_table",
-    "system_audit_log_table",
-    "user_table",
+    "analyst_shift",
+    "emergency_alert",
+    "incident_report",
+    "landslide_inventory",
+    "model_version",
+    "prediction_feature",
+    "rainfall_matrix_table",  # Fixed: Synchronized table name with model mapping
+    "risk_inference",
+    "risk_review",
+    "sector",
+    "system_audit_log",
+    "user",
 }
 
 

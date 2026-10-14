@@ -9,7 +9,7 @@ from database import Base
 
 
 class ModelVersion(Base):
-    __tablename__ = "model_version_table"
+    __tablename__ = "model_version"
     __table_args__ = (
         UniqueConstraint(
             "model_name", "version_code", name="uq_model_versions_name_version"

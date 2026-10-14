@@ -17,7 +17,7 @@ from database import Base
 
 
 class RiskReview(Base):
-    __tablename__ = "risk_review_table"
+    __tablename__ = "risk_review"
     __table_args__ = (
         UniqueConstraint(
             "inference_id", "alert_id", name="uq_risk_reviews_inference_alert"
@@ -31,10 +31,10 @@ class RiskReview(Base):
 
     review_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     inference_id = Column(
-        Uuid, ForeignKey("risk_inference_table.inference_id"), nullable=True
+        Uuid, ForeignKey("risk_inference.inference_id"), nullable=True
     )
-    alert_id = Column(Uuid, ForeignKey("emergency_alert_table.alert_id"), nullable=True)
-    reviewed_by = Column(Uuid, ForeignKey("user_table.user_id"), nullable=False)
+    alert_id = Column(Uuid, ForeignKey("emergency_alert.alert_id"), nullable=True)
+    reviewed_by = Column(Uuid, ForeignKey("user.user_id"), nullable=False)
     decision = Column(
         enum_column(ReviewDecision, "review_decision_enum"), nullable=False
     )
