@@ -5,44 +5,30 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, StatementError
 
-from models import (
-    EmergencyAlert,
-    IncidentReport,
-    LandslideInventory,
-    PredictionFeature,
-    RainfallMatrix,
-    RiskInference,
-    RiskReview,
-    Sector,
-    User,
-)
 from models._enums import GeologyClass
-from tests.factories import (
-    make_alert,
-    make_feature_snapshot,
-    make_incident,
-    make_inference,
-    make_landslide,
-    make_rainfall,
-    make_review,
-    make_sector,
-    make_user,
-)
-from tests.helpers import assert_recent_utc, count_rows
+from models.emergency_alerts_model import EmergencyAlert
+from models.incident_reports_model import IncidentReport
+from models.landslide_inventory_model import LandslideInventory
+from models.prediction_features_model import PredictionFeature
+from models.rainfall_matrices_model import RainfallMatrix
+from models.risk_inferences_model import RiskInference
+from models.risk_reviews_model import RiskReview
+from models.sectors_model import Sector
+from models.users_model import User
 
 
-def test_sector_persists_and_reloads(session):
+def test_sector_persists_and_reloads(db_session, make_sector):
     sector = make_sector(
         province_name="Western",
         mean_slope_deg=Decimal("31.25"),
         geology_class=GeologyClass.SCHIST,
         soil_features={"texture": "sandy loam", "layers": [10, 20]},
     )
-    session.add(sector)
-    session.commit()
-    session.expire_all()
+    db_session.add(sector)
+    db_session.commit()
+    db_session.expire_all()
 
-    loaded = session.get(Sector, sector.sector_id)
+    loaded = db_session.get(Sector, sector.sector_id)
     assert loaded is not None
     assert loaded.province_name == "Western"
     assert loaded.mean_slope_deg == Decimal("31.25")
@@ -50,10 +36,12 @@ def test_sector_persists_and_reloads(session):
     assert loaded.soil_features == {"texture": "sandy loam", "layers": [10, 20]}
 
 
-def test_sector_generates_uuid_and_utc_timestamp(session):
+def test_sector_generates_uuid_and_utc_timestamp(
+    db_session, make_sector, assert_recent_utc
+):
     sector = make_sector()
-    session.add(sector)
-    session.flush()
+    db_session.add(sector)
+    db_session.flush()
 
     assert isinstance(sector.sector_id, uuid.UUID)
     assert_recent_utc(sector.created_at)
@@ -72,63 +60,63 @@ def test_sector_generates_uuid_and_utc_timestamp(session):
         "land_cover_class",
     ],
 )
-def test_required_columns_reject_null(session, column):
-    session.add(make_sector(**{column: None}))
+def test_required_columns_reject_null(db_session, column, make_sector):
+    db_session.add(make_sector(**{column: None}))
     with pytest.raises(IntegrityError):
-        session.flush()
+        db_session.flush()
 
 
-def test_district_and_sector_name_must_be_unique_together(session):
-    session.add(make_sector(district_name="Rutsiro", sector_name="Boneza"))
-    session.flush()
-    session.add(make_sector(district_name="Rutsiro", sector_name="Boneza"))
+def test_district_and_sector_name_must_be_unique_together(db_session, make_sector):
+    db_session.add(make_sector(district_name="Rutsiro", sector_name="Boneza"))
+    db_session.flush()
+    db_session.add(make_sector(district_name="Rutsiro", sector_name="Boneza"))
     with pytest.raises(IntegrityError):
-        session.flush()
+        db_session.flush()
 
 
-def test_same_sector_name_allowed_in_different_districts(session):
-    session.add_all(
+def test_same_sector_name_allowed_in_different_districts(db_session, make_sector):
+    db_session.add_all(
         [
             make_sector(district_name="Rutsiro", sector_name="Central"),
             make_sector(district_name="Nyabihu", sector_name="Central"),
         ]
     )
-    session.flush()
-    assert count_rows(session, Sector) == 2
+    db_session.flush()
+    assert db_session.query(Sector).count() == 2
 
 
-def test_negative_slope_is_rejected(session):
-    session.add(make_sector(mean_slope_deg=Decimal("-0.01")))
+def test_negative_slope_is_rejected(db_session, make_sector):
+    db_session.add(make_sector(mean_slope_deg=Decimal("-0.01")))
     with pytest.raises(IntegrityError):
-        session.flush()
+        db_session.flush()
 
 
-def test_zero_slope_is_allowed(session):
-    session.add(make_sector(mean_slope_deg=Decimal(0)))
-    session.flush()
-    assert count_rows(session, Sector) == 1
+def test_zero_slope_is_allowed(db_session, make_sector):
+    db_session.add(make_sector(mean_slope_deg=Decimal(0)))
+    db_session.flush()
+    assert db_session.query(Sector).count() == 1
 
 
 @pytest.mark.parametrize("geology", list(GeologyClass))
-def test_every_geology_class_can_be_stored(session, geology):
+def test_every_geology_class_can_be_stored(db_session, geology, make_sector):
     sector = make_sector(geology_class=geology)
-    session.add(sector)
-    session.commit()
-    session.expire_all()
-    assert session.get(Sector, sector.sector_id).geology_class is geology
+    db_session.add(sector)
+    db_session.commit()
+    db_session.expire_all()
+    assert db_session.get(Sector, sector.sector_id).geology_class is geology
 
 
-def test_unknown_geology_class_is_rejected_by_the_orm(session):
-    session.add(make_sector(geology_class="MARBLE"))
+def test_unknown_geology_class_is_rejected_by_the_orm(db_session, make_sector):
+    db_session.add(make_sector(geology_class="MARBLE"))
     with pytest.raises(StatementError):
-        session.flush()
+        db_session.flush()
 
 
-def test_unknown_geology_class_is_rejected_by_the_database(session):
+def test_unknown_geology_class_is_rejected_by_the_database(db_session):
     with pytest.raises(IntegrityError):
-        session.execute(
+        db_session.execute(
             text(
-                "INSERT INTO sectors (sector_id, province_name, district_name, "
+                "INSERT INTO sector_table (sector_id, province_name, district_name, "
                 "sector_name, boundary_ref, mean_slope_deg, geology_class, "
                 "soil_features, land_cover_class, created_at) VALUES "
                 "(:id, 'W', 'D', 'S', 'b', 10, 'MARBLE', '{}', 'Crop', "
@@ -138,12 +126,14 @@ def test_unknown_geology_class_is_rejected_by_the_database(session):
         )
 
 
-def test_sector_relationships_are_two_way(session):
+def test_sector_relationships_are_two_way(
+    db_session, make_sector, make_rainfall, make_landslide
+):
     sector = make_sector()
     rainfall = make_rainfall(sector)
     landslide = make_landslide(sector)
-    session.add(sector)
-    session.flush()
+    db_session.add(sector)
+    db_session.flush()
 
     assert sector.rainfall_matrices == [rainfall]
     assert sector.landslide_inventory == [landslide]
@@ -151,13 +141,24 @@ def test_sector_relationships_are_two_way(session):
     assert landslide.sector is sector
 
 
-def test_deleting_a_sector_removes_everything_it_owns(session):
+def test_deleting_a_sector_removes_everything_it_owns(
+    db_session,
+    make_sector,
+    make_user,
+    make_inference,
+    make_feature_snapshot,
+    make_alert,
+    make_rainfall,
+    make_landslide,
+    make_incident,
+    make_review,
+):
     sector = make_sector()
     reviewer = make_user()
     inference = make_inference(sector)
     make_feature_snapshot(inference)
     alert = make_alert(inference)
-    session.add_all(
+    db_session.add_all(
         [
             sector,
             reviewer,
@@ -168,10 +169,10 @@ def test_deleting_a_sector_removes_everything_it_owns(session):
             make_review(reviewer, alert=alert),
         ]
     )
-    session.commit()
+    db_session.commit()
 
-    session.delete(sector)
-    session.commit()
+    db_session.delete(sector)
+    db_session.commit()
 
     for model in (
         Sector,
@@ -183,5 +184,5 @@ def test_deleting_a_sector_removes_everything_it_owns(session):
         RiskReview,
         IncidentReport,
     ):
-        assert count_rows(session, model) == 0, model.__name__
-    assert count_rows(session, User) == 1
+        assert db_session.query(model).count() == 0, model.__name__
+    assert db_session.query(User).count() == 1

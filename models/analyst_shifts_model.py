@@ -1,20 +1,14 @@
 import uuid
-from datetime import datetime
-from decimal import Decimal
-from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, Uuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Numeric, Uuid
+from sqlalchemy.orm import relationship
 
-from database import Base
 from models._types import utcnow
-
-if TYPE_CHECKING:
-    from models.users_model import User
+from database import Base
 
 
 class AnalystShift(Base):
-    __tablename__ = "analyst_shifts"
+    __tablename__ = "analyst_shift_table"
     __table_args__ = (
         CheckConstraint(
             "checked_out_at IS NULL OR checked_out_at > checked_in_at",
@@ -22,24 +16,12 @@ class AnalystShift(Base):
         ),
     )
 
-    shift_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, default=uuid.uuid4
+    shift_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    analyst_id = Column(
+        Uuid, ForeignKey("user_table.user_id", ondelete="CASCADE"), nullable=False
     )
-    analyst_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False
-    )
-    checked_in_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=utcnow
-    )
-    checked_out_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    duration_minutes: Mapped[Decimal | None] = mapped_column(
-        Numeric(10, 2), nullable=True
-    )
+    checked_in_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
+    checked_out_at = Column(DateTime(timezone=True), nullable=True)
+    duration_minutes = Column(Numeric(10, 2), nullable=True)
 
-    analyst: Mapped["User"] = relationship(back_populates="shifts")
-
-    def __repr__(self) -> str:
-        state = "open" if self.checked_out_at is None else "closed"
-        return f"<AnalystShift {self.analyst_id} ({state})>"
+    analyst = relationship("User", back_populates="shifts")
