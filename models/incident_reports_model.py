@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Numeric, Text, Uuid
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Text, Uuid
 from sqlalchemy.orm import relationship
 
 from models._enums import IncidentStatus
