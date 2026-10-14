@@ -42,8 +42,6 @@ engine = create_engine(
 
 @event.listens_for(engine, "connect")
 def _enforce_foreign_keys(dbapi_connection, _record):
-    """SQLite ignores foreign keys unless asked, but the model tests rely on
-    them (RESTRICT / CASCADE / 'must exist' checks)."""
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
@@ -54,8 +52,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(autouse=True)
 def _fresh_database():
-    """Build a brand-new schema before every test and tear it down after,
-    so no state ever leaks between tests."""
+
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
@@ -63,8 +60,6 @@ def _fresh_database():
 
 @pytest.fixture
 def db_session():
-    """A raw SQLAlchemy session for arranging/asserting data directly,
-    bypassing the API."""
     db = TestingSessionLocal()
     try:
         yield db
@@ -74,8 +69,6 @@ def db_session():
 
 @pytest.fixture
 def client():
-    """A TestClient wired to the isolated SQLite database instead of the
-    application's normal (Postgres) dependency."""
 
     def override_get_db():
         db = TestingSessionLocal()
@@ -99,7 +92,6 @@ def _n():
 
 @pytest.fixture
 def make_sector():
-    """Factory fixture: make_sector(**overrides) -> unsaved Sector."""
 
     def _factory(**overrides):
         n = _n()
@@ -120,7 +112,6 @@ def make_sector():
 
 @pytest.fixture
 def make_user():
-    """Factory fixture: make_user(**overrides) -> unsaved User."""
 
     def _factory(**overrides):
         n = _n()
@@ -140,7 +131,6 @@ def make_user():
 
 @pytest.fixture
 def make_rainfall():
-    """Factory fixture: make_rainfall(sector, **overrides) -> unsaved RainfallMatrix."""
 
     def _factory(sector, **overrides):
         defaults = {"sector": sector, "observation_date": date(2026, 4, 1)}
@@ -151,8 +141,6 @@ def make_rainfall():
 
 @pytest.fixture
 def make_landslide():
-    """Factory fixture: make_landslide(sector, **overrides) -> unsaved
-    LandslideInventory."""
 
     def _factory(sector, **overrides):
         defaults = {
@@ -167,7 +155,6 @@ def make_landslide():
 
 @pytest.fixture
 def make_model_version():
-    """Factory fixture: make_model_version(**overrides) -> unsaved ModelVersion."""
 
     def _factory(**overrides):
         n = _n()
@@ -184,8 +171,6 @@ def make_model_version():
 
 @pytest.fixture
 def make_inference():
-    """Factory fixture: make_inference(sector, **overrides) -> unsaved
-    RiskInference."""
 
     def _factory(sector, **overrides):
         defaults = {
@@ -200,8 +185,6 @@ def make_inference():
 
 @pytest.fixture
 def make_feature_snapshot():
-    """Factory fixture: make_feature_snapshot(inference, **overrides) -> unsaved
-    PredictionFeature."""
 
     def _factory(inference, **overrides):
         defaults = {
@@ -215,8 +198,6 @@ def make_feature_snapshot():
 
 @pytest.fixture
 def make_alert():
-    """Factory fixture: make_alert(inference, **overrides) -> unsaved
-    EmergencyAlert."""
 
     def _factory(inference, **overrides):
         defaults = {
@@ -233,7 +214,6 @@ def make_alert():
 
 @pytest.fixture
 def make_review():
-    """Factory fixture: make_review(reviewer, **overrides) -> unsaved RiskReview."""
 
     def _factory(reviewer, **overrides):
         defaults = {"reviewed_by_user": reviewer, "decision": ReviewDecision.APPROVED}

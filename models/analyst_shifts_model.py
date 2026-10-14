@@ -8,7 +8,7 @@ from database import Base
 
 
 class AnalystShift(Base):
-    __tablename__ = "analyst_shift_table"
+    __tablename__ = "analyst_shift"
     __table_args__ = (
         CheckConstraint(
             "checked_out_at IS NULL OR checked_out_at > checked_in_at",
@@ -18,7 +18,7 @@ class AnalystShift(Base):
 
     shift_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     analyst_id = Column(
-        Uuid, ForeignKey("user_table.user_id", ondelete="CASCADE"), nullable=False
+        Uuid, ForeignKey("user.user_id", ondelete="CASCADE"), nullable=False
     )
     checked_in_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     checked_out_at = Column(DateTime(timezone=True), nullable=True)

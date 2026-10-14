@@ -9,7 +9,7 @@ from database import Base
 
 
 class RiskInference(Base):
-    __tablename__ = "risk_inference_table"
+    __tablename__ = "risk_inference"
     __table_args__ = (
         CheckConstraint(
             "risk_score >= 0 AND risk_score <= 1", name="ck_risk_score_range"
@@ -17,9 +17,9 @@ class RiskInference(Base):
     )
 
     inference_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
-    sector_id = Column(Uuid, ForeignKey("sector_table.sector_id"), nullable=False)
+    sector_id = Column(Uuid, ForeignKey("sector.sector_id"), nullable=False)
     model_version_id = Column(
-        Uuid, ForeignKey("model_version_table.model_version_id"), nullable=True
+        Uuid, ForeignKey("model_version.model_version_id"), nullable=True
     )
     prediction_time = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     risk_level = Column(enum_column(RiskLevel, "risk_level_enum"), nullable=False)
