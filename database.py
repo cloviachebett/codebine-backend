@@ -3,6 +3,7 @@ import sys
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.pool import StaticPool
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -11,10 +12,20 @@ DATABASE_URL = os.getenv(
     else "postgresql+asyncpg://postgres:postgres@localhost:5432/TerraWatch_db",
 )
 
-engine = create_async_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-)
+is_sqlite = DATABASE_URL.startswith("sqlite+aiosqlite")
+
+if is_sqlite:
+    engine = create_async_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        pool_pre_ping=True,
+    )
+else:
+    engine = create_async_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+    )
 
 SessionLocal = async_sessionmaker(
     autocommit=False,
@@ -32,6 +43,7 @@ async def get_db() -> AsyncSession:
 
 
 async def create_tables():
-    """Create all tables defined in models."""
+    # Create all tables defined in models.
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
