@@ -1,0 +1,35 @@
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import get_db
+from schemas.risk_inference_schema import RiskInferenceCreate, RiskInferenceResponse
+from services.risk_inference_service import RiskInferenceService
+
+router = APIRouter(prefix="/analytics/inferences", tags=["Risk Inferences"])
+
+
+@router.post(
+    "", response_model=RiskInferenceResponse, status_code=status.HTTP_201_CREATED
+)
+async def log_inference(
+    payload: RiskInferenceCreate, db: AsyncSession = Depends(get_db)
+):
+    service = RiskInferenceService(db)
+    result = await service.record_prediction(
+        model_version_id=payload.model_version_id,
+        sector_id=payload.sector_id,
+        risk_level=payload.risk_level,
+        risk_score=payload.risk_score,
+    )
+    return result
+
+
+@router.get("/{inference_id}", response_model=RiskInferenceResponse)
+async def get_inference(inference_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    service = RiskInferenceService(db)
+    result = await service.fetch_prediction(inference_id)
+    if not result:
+        raise HTTPException(
+            status_code=404, detail="Prediction signature log entries not found."
+        )
+    return result

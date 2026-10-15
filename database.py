@@ -1,48 +1,37 @@
 import os
 import sys
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import declarative_base
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "sqlite:///:memory:"
+    "sqlite+aiosqlite:///:memory:"
     if "pytest" in os.environ.get("PYTEST_CURRENT_TEST", "") or "pytest" in sys.argv
-    else "postgresql://postgres:postgres@localhost:5432/TerraWatch_db",
+    else "postgresql+asyncpg://postgres:postgres@localhost:5432/TerraWatch_db",
 )
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-
-engine = create_engine(
+engine = create_async_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    connect_args=connect_args,
 )
 
-
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    if "sqlite" in engine.url.drivername:
-        cursor = dbapi_connection.cursor()
-        try:
-            cursor.execute("PRAGMA foreign_keys=ON;")
-            cursor.execute("PRAGMA ignore_check_constraints=OFF;")
-        finally:
-            cursor.close()
-
-
-SessionLocal = sessionmaker(
+SessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
     bind=engine,
+    class_=AsyncSession,
 )
 
 Base = declarative_base()
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncSession:
+    async with SessionLocal() as session:
+        yield session
+
+
+async def create_tables():
+    """Create all tables defined in models."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
