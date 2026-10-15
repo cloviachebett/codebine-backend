@@ -1,3 +1,5 @@
+"""Tests for the RiskInference model."""
+
 import uuid
 from decimal import Decimal
 
@@ -18,7 +20,8 @@ def test_new_inference_defaults(
     db_session.flush()
 
     assert_recent_utc(inference.prediction_time)
-    assert inference.model_version_id is None
+    assert inference.model_version_id is not None
+    assert inference.feature_snapshot_id is None
     assert inference.feature_snapshot is None
     assert inference.emergency_alerts == []
     assert inference.risk_reviews == []
@@ -69,7 +72,7 @@ def test_unknown_risk_level_is_rejected(db_session, make_inference, make_sector)
         db_session.flush()
 
 
-@pytest.mark.parametrize("column", ["risk_level", "risk_score"])
+@pytest.mark.parametrize("column", ["risk_level", "risk_score", "model_version"])
 def test_required_columns_reject_null(db_session, column, make_inference, make_sector):
     db_session.add(make_inference(make_sector(), **{column: None}))
     with pytest.raises(IntegrityError):
@@ -82,16 +85,46 @@ def test_sector_is_required(db_session, make_inference):
         db_session.flush()
 
 
-def test_sector_must_exist(db_session):
+def test_sector_must_exist(db_session, make_model_version):
+    version = make_model_version()
+    db_session.add(version)
+    db_session.flush()
     db_session.add(
         RiskInference(
             sector_id=uuid.uuid4(),
+            model_version_id=version.model_version_id,
             risk_level=RiskLevel.LOW,
             risk_score=Decimal("0.1"),
         )
     )
     with pytest.raises(IntegrityError):
         db_session.flush()
+
+
+def test_model_version_is_required(db_session, make_inference, make_sector):
+    db_session.add(make_inference(make_sector(), model_version=None))
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_model_version_must_exist(db_session, make_inference, make_sector):
+    db_session.add(
+        make_inference(make_sector(), model_version=None, model_version_id=uuid.uuid4())
+    )
+    with pytest.raises(IntegrityError):
+        db_session.flush()
+
+
+def test_feature_snapshot_id_is_optional_and_stores_a_reference(
+    db_session, make_inference, make_sector
+):
+    snapshot_id = uuid.uuid4()
+    inference = make_inference(make_sector(), feature_snapshot_id=snapshot_id)
+    db_session.add(inference)
+    db_session.commit()
+    db_session.expire_all()
+
+    assert inference.feature_snapshot_id == snapshot_id
 
 
 def test_inference_links_to_sector_and_model_version(

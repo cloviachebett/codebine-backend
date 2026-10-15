@@ -1,3 +1,5 @@
+from models.analyst_shifts import AnalystShift
+from models.dataset_metadata import DatasetMetadata
 from models.emergency_alerts import EmergencyAlert
 from models.incident_reports import IncidentReport
 from models.landslide_inventory import LandslideInventory
@@ -12,6 +14,7 @@ from models.users import User
 
 __all__ = [
     "AnalystShift",
+    "DatasetMetadata",
     "EmergencyAlert",
     "IncidentReport",
     "LandslideInventory",

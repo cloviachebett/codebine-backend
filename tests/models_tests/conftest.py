@@ -1,6 +1,6 @@
 import itertools
 import os
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -9,16 +9,21 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+# The test suite must NEVER touch the real Postgres development database.
+# Setting DATABASE_URL before importing `database`/`main` makes sure the
+# app itself is wired up against SQLite for the whole test session.
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from models._enums import (
     AlertChannel,
     AlertSeverity,
+    DatasetFactorType,
     GeologyClass,
     ReviewDecision,
     RiskLevel,
 )
 from models._types import utcnow
+from models.dataset_metadata import DatasetMetadata
 from models.emergency_alerts import EmergencyAlert
 from models.incident_reports import IncidentReport
 from models.landslide_inventory import LandslideInventory
@@ -42,6 +47,8 @@ engine = create_engine(
 
 @event.listens_for(engine, "connect")
 def _enforce_foreign_keys(dbapi_connection, _record):
+    """SQLite ignores foreign keys unless asked, but the model tests rely on
+    them (RESTRICT / CASCADE / 'must exist' checks)."""
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
@@ -52,7 +59,8 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(autouse=True)
 def _fresh_database():
-
+    """Build a brand-new schema before every test and tear it down after,
+    so no state ever leaks between tests."""
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
@@ -60,6 +68,8 @@ def _fresh_database():
 
 @pytest.fixture
 def db_session():
+    """A raw SQLAlchemy session for arranging/asserting data directly,
+    bypassing the API."""
     db = TestingSessionLocal()
     try:
         yield db
@@ -69,6 +79,8 @@ def db_session():
 
 @pytest.fixture
 def client():
+    """A TestClient wired to the isolated SQLite database instead of the
+    application's normal (Postgres) dependency."""
 
     def override_get_db():
         db = TestingSessionLocal()
@@ -92,6 +104,7 @@ def _n():
 
 @pytest.fixture
 def make_sector():
+    """Factory fixture: make_sector(**overrides) -> unsaved Sector."""
 
     def _factory(**overrides):
         n = _n()
@@ -112,6 +125,7 @@ def make_sector():
 
 @pytest.fixture
 def make_user():
+    """Factory fixture: make_user(**overrides) -> unsaved User."""
 
     def _factory(**overrides):
         n = _n()
@@ -130,10 +144,32 @@ def make_user():
 
 
 @pytest.fixture
+def make_dataset():
+    """Factory fixture: make_dataset(**overrides) -> unsaved DatasetMetadata."""
+
+    def _factory(**overrides):
+        n = _n()
+        defaults = {
+            "dataset_name": f"CHIRPS rainfall {n}",
+            "factor_type": DatasetFactorType.RAINFALL,
+            "source_name": "CHIRPS",
+            "file_path": f"datasets/chirps_{n}.tif",
+            "version": "v1",
+        }
+        return DatasetMetadata(**{**defaults, **overrides})
+
+    return _factory
+
+
+@pytest.fixture
 def make_rainfall():
+    """Factory fixture: make_rainfall(sector, **overrides) -> unsaved RainfallMatrix."""
 
     def _factory(sector, **overrides):
-        defaults = {"sector": sector, "observation_date": date(2026, 4, 1)}
+        defaults = {
+            "sector": sector,
+            "observation_time": datetime(2026, 4, 1, tzinfo=timezone.utc),
+        }
         return RainfallMatrix(**{**defaults, **overrides})
 
     return _factory
@@ -141,11 +177,15 @@ def make_rainfall():
 
 @pytest.fixture
 def make_landslide():
+    """Factory fixture: make_landslide(sector, **overrides) -> unsaved
+    LandslideInventory."""
 
     def _factory(sector, **overrides):
         defaults = {
             "sector": sector,
-            "event_date": date(2023, 5, 3),
+            "event_date": datetime(2023, 5, 3, tzinfo=timezone.utc),
+            "latitude": Decimal("-1.947500"),
+            "longitude": Decimal("29.874321"),
             "source_name": "RNRA inventory",
         }
         return LandslideInventory(**{**defaults, **overrides})
@@ -155,6 +195,7 @@ def make_landslide():
 
 @pytest.fixture
 def make_model_version():
+    """Factory fixture: make_model_version(**overrides) -> unsaved ModelVersion."""
 
     def _factory(**overrides):
         n = _n()
@@ -163,6 +204,9 @@ def make_model_version():
             "version_code": "v1.0.0",
             "model_type": "RandomForest",
             "model_path": f"models/landslide_rf_{n}.joblib",
+            "precision": {"value": 0.88},
+            "recall": {"value": 0.84},
+            "f1_score": {"value": 0.86},
         }
         return ModelVersion(**{**defaults, **overrides})
 
@@ -171,8 +215,23 @@ def make_model_version():
 
 @pytest.fixture
 def make_inference():
+    """Factory fixture: make_inference(sector, **overrides) -> unsaved
+    RiskInference."""
 
     def _factory(sector, **overrides):
+        # model_version_id is required, so every inference gets a model version
+        # unless the test passes its own (model_version=... / model_version_id=...).
+        if "model_version" not in overrides and "model_version_id" not in overrides:
+            n = _n()
+            overrides["model_version"] = ModelVersion(
+                model_name=f"landslide-rf-{n}",
+                version_code="v1.0.0",
+                model_type="RandomForest",
+                model_path=f"models/landslide_rf_{n}.joblib",
+                precision={"value": 0.88},
+                recall={"value": 0.84},
+                f1_score={"value": 0.86},
+            )
         defaults = {
             "sector": sector,
             "risk_level": RiskLevel.HIGH,
@@ -185,6 +244,8 @@ def make_inference():
 
 @pytest.fixture
 def make_feature_snapshot():
+    """Factory fixture: make_feature_snapshot(inference, **overrides) -> unsaved
+    PredictionFeature."""
 
     def _factory(inference, **overrides):
         defaults = {
@@ -198,6 +259,8 @@ def make_feature_snapshot():
 
 @pytest.fixture
 def make_alert():
+    """Factory fixture: make_alert(inference, **overrides) -> unsaved
+    EmergencyAlert."""
 
     def _factory(inference, **overrides):
         defaults = {
@@ -214,6 +277,7 @@ def make_alert():
 
 @pytest.fixture
 def make_review():
+    """Factory fixture: make_review(reviewer, **overrides) -> unsaved RiskReview."""
 
     def _factory(reviewer, **overrides):
         defaults = {"reviewed_by_user": reviewer, "decision": ReviewDecision.APPROVED}
@@ -224,11 +288,15 @@ def make_review():
 
 @pytest.fixture
 def make_incident():
+    """Factory fixture: make_incident(sector, **overrides) -> unsaved
+    IncidentReport."""
 
     def _factory(sector, **overrides):
         defaults = {
             "sector": sector,
-            "event_date": date(2026, 4, 2),
+            "event_date": datetime(2026, 4, 2, tzinfo=timezone.utc),
+            "latitude": Decimal("-1.944100"),
+            "longitude": Decimal("30.061900"),
             "description": "Slope failure blocked the road above the market.",
         }
         return IncidentReport(**{**defaults, **overrides})
@@ -238,6 +306,7 @@ def make_incident():
 
 @pytest.fixture
 def make_audit_log():
+    """Factory fixture: make_audit_log(**overrides) -> unsaved SystemAuditLog."""
 
     def _factory(**overrides):
         defaults = {"action_type": "LOGIN", "entity_type": "USER"}
@@ -248,6 +317,8 @@ def make_audit_log():
 
 @pytest.fixture
 def assert_recent_utc():
+    """Factory fixture: assert_recent_utc(value, seconds=10) checks that a
+    timestamp is timezone-aware and was set within the last few seconds."""
 
     def _check(value, seconds=10):
         assert value.tzinfo is not None

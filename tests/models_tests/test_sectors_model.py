@@ -1,3 +1,5 @@
+"""Tests for the Sector model."""
+
 import uuid
 from decimal import Decimal
 
@@ -22,10 +24,7 @@ def test_sector_persists_and_reloads(db_session, make_sector):
         province_name="Western",
         mean_slope_deg=Decimal("31.25"),
         geology_class=GeologyClass.SCHIST,
-        soil_features={
-            "texture": "sandy loam",
-            "layers": [10, 20],
-        },  # Fixed missing arrays
+        soil_features={"texture": "sandy loam", "layers": [10, 20]},
     )
     db_session.add(sector)
     db_session.commit()
@@ -36,10 +35,7 @@ def test_sector_persists_and_reloads(db_session, make_sector):
     assert loaded.province_name == "Western"
     assert loaded.mean_slope_deg == Decimal("31.25")
     assert loaded.geology_class is GeologyClass.SCHIST
-    assert loaded.soil_features == {
-        "texture": "sandy loam",
-        "layers": [10, 20],
-    }
+    assert loaded.soil_features == {"texture": "sandy loam", "layers": [10, 20]}
 
 
 def test_sector_generates_uuid_and_utc_timestamp(
@@ -118,12 +114,14 @@ def test_unknown_geology_class_is_rejected_by_the_orm(db_session, make_sector):
         db_session.flush()
 
 
+# In tests/test_sectors_model.py
+
+
 def test_unknown_geology_class_is_rejected_by_the_database(db_session):
     with pytest.raises(IntegrityError):
-        # Target corrected to point to valid 'sector' table structure
         db_session.execute(
             text(
-                "INSERT INTO sector (sector_id, province_name, district_name, "
+                "INSERT INTO sectors (sector_id, province_name, district_name, "
                 "sector_name, boundary_ref, mean_slope_deg, geology_class, "
                 "soil_features, land_cover_class, created_at) VALUES "
                 "(:id, 'W', 'D', 'S', 'b', 10, 'MARBLE', '{}', 'Crop', "
@@ -131,7 +129,6 @@ def test_unknown_geology_class_is_rejected_by_the_database(db_session):
             ),
             {"id": uuid.uuid4().hex},
         )
-        db_session.flush()
 
 
 def test_sector_relationships_are_two_way(

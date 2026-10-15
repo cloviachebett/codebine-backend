@@ -1,3 +1,5 @@
+"""Tests for the SystemAuditLog model."""
+
 import uuid
 
 import pytest

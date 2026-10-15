@@ -1,5 +1,7 @@
+"""Tests for the IncidentReport model."""
+
 import uuid
-from datetime import date
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -18,8 +20,6 @@ def test_new_report_defaults_to_submitted(
 
     assert report.status is IncidentStatus.SUBMITTED
     assert report.reported_by is None
-    assert report.latitude == 0.0
-    assert report.longitude == 0.0
     assert_recent_utc(report.reported_at)
 
 
@@ -27,9 +27,9 @@ def test_report_persists_and_reloads(db_session, make_sector, make_incident):
     sector = make_sector()
     report = make_incident(
         sector,
-        event_date=date(2026, 4, 2),
-        latitude=float(Decimal("-1.9441")),
-        longitude=float(Decimal("30.0619")),
+        event_date=datetime(2026, 4, 2, tzinfo=timezone.utc),
+        latitude=Decimal("-1.9441"),
+        longitude=Decimal("30.0619"),
         description="Road cut off near the school.",
     )
     db_session.add(report)
@@ -38,10 +38,10 @@ def test_report_persists_and_reloads(db_session, make_sector, make_incident):
 
     loaded = db_session.get(IncidentReport, report.report_id)
     assert loaded.sector_id == sector.sector_id
-    assert loaded.event_date == date(2026, 4, 2)
-    # Fixed: Compared as floats since SQLite loads numeric columns as floats
-    assert loaded.latitude == -1.9441
-    assert loaded.longitude == 30.0619
+    # SQLite drops tzinfo on reload, so compare the wall-clock value.
+    assert loaded.event_date.replace(tzinfo=None) == datetime(2026, 4, 2)
+    assert loaded.latitude == Decimal("-1.944100")
+    assert loaded.longitude == Decimal("30.061900")
     assert loaded.description == "Road cut off near the school."
 
 
@@ -114,7 +114,9 @@ def test_sector_must_exist(db_session):
     db_session.add(
         IncidentReport(
             sector_id=uuid.uuid4(),
-            event_date=date(2026, 4, 2),
+            event_date=datetime(2026, 4, 2, tzinfo=timezone.utc),
+            latitude=Decimal("-1.9441"),
+            longitude=Decimal("30.0619"),
             description="x",
         )
     )
@@ -122,7 +124,9 @@ def test_sector_must_exist(db_session):
         db_session.flush()
 
 
-@pytest.mark.parametrize("column", ["event_date", "description"])
+@pytest.mark.parametrize(
+    "column", ["event_date", "latitude", "longitude", "description"]
+)
 def test_required_columns_reject_null(db_session, column, make_incident, make_sector):
     db_session.add(make_incident(make_sector(), **{column: None}))
     with pytest.raises(IntegrityError):

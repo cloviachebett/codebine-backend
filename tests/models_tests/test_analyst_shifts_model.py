@@ -1,3 +1,5 @@
+"""Tests for the AnalystShift model."""
+
 import uuid
 from datetime import timedelta
 

@@ -9,7 +9,7 @@ from database import Base
 
 
 class ModelVersion(Base):
-    __tablename__ = "model_version"
+    __tablename__ = "model_versions"
     __table_args__ = (
         UniqueConstraint(
             "model_name", "version_code", name="uq_model_versions_name_version"
@@ -21,7 +21,9 @@ class ModelVersion(Base):
     version_code = Column(String(50), nullable=False)
     model_type = Column(String(100), nullable=False)
     model_path = Column(Text, nullable=False)
-    evaluation_metrics = Column(JSONVariant, nullable=True)
+    precision = Column(JSONVariant, nullable=False)
+    recall = Column(JSONVariant, nullable=False)
+    f1_score = Column(JSONVariant, nullable=False)
     model_status = Column(
         enum_column(ModelStatus, "model_status_enum"),
         nullable=False,

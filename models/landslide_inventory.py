@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, Date, ForeignKey, Numeric, String, Text, Uuid
+from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, Text, Uuid
 from sqlalchemy.orm import relationship
 
 from models._enums import LandslideSeverity
@@ -12,10 +12,10 @@ class LandslideInventory(Base):
     __tablename__ = "landslide_inventory"
 
     landslide_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
-    sector_id = Column(Uuid, ForeignKey("sector.sector_id"), nullable=False)
-    event_date = Column(Date, nullable=False)
-    latitude = Column(Numeric(9, 6), nullable=True)
-    longitude = Column(Numeric(9, 6), nullable=True)
+    sector_id = Column(Uuid, ForeignKey("sectors.sector_id"), nullable=True)
+    event_date = Column(DateTime(timezone=True), nullable=True)
+    latitude = Column(Numeric(9, 6), nullable=False)
+    longitude = Column(Numeric(9, 6), nullable=False)
     severity = Column(
         enum_column(LandslideSeverity, "landslide_severity_enum"), nullable=True
     )

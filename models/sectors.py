@@ -18,7 +18,7 @@ from database import Base
 
 
 class Sector(Base):
-    __tablename__ = "sector"
+    __tablename__ = "sectors"
     __table_args__ = (
         CheckConstraint("mean_slope_deg >= 0", name="ck_sectors_slope_non_negative"),
         UniqueConstraint(
@@ -42,15 +42,18 @@ class Sector(Base):
     rainfall_matrices = relationship(
         "RainfallMatrix", back_populates="sector", cascade="all, delete-orphan"
     )
+
     landslide_inventory = relationship(
         "LandslideInventory", back_populates="sector", cascade="all, delete-orphan"
     )
+
     risk_inferences = relationship(
         "RiskInference", back_populates="sector", cascade="all, delete-orphan"
     )
     emergency_alerts = relationship(
         "EmergencyAlert", back_populates="sector", cascade="all, delete-orphan"
     )
+
     incident_reports = relationship(
         "IncidentReport", back_populates="sector", cascade="all, delete-orphan"
     )

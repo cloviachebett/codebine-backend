@@ -1,8 +1,12 @@
+"""Tests for the ModelVersion model."""
+
 import pytest
 from sqlalchemy.exc import IntegrityError, StatementError
 
 from models._enums import ModelStatus
 from models.model_versions import ModelVersion
+
+METRICS = ["precision", "recall", "f1_score"]
 
 
 def test_new_model_version_starts_in_training(db_session, make_model_version):
@@ -11,12 +15,12 @@ def test_new_model_version_starts_in_training(db_session, make_model_version):
     db_session.flush()
 
     assert version.model_status is ModelStatus.TRAINING
-    assert version.evaluation_metrics is None
     assert version.created_at is not None
 
 
 @pytest.mark.parametrize(
-    "column", ["model_name", "version_code", "model_type", "model_path"]
+    "column",
+    ["model_name", "version_code", "model_type", "model_path"] + METRICS,
 )
 def test_required_columns_reject_null(db_session, column, make_model_version):
     db_session.add(make_model_version(**{column: None}))
@@ -56,21 +60,21 @@ def test_same_model_can_have_several_versions(db_session, make_model_version):
     db_session.flush()
 
 
-def test_evaluation_metrics_round_trip_as_json(db_session, make_model_version):
-    metrics = {
-        "auc": 0.91,
-        "recall": 0.84,
-        "confusion": [[120, 8], [11, 61]],
-        "notes": {"split": "2015-2022 train / 2023 test"},
+@pytest.mark.parametrize("column", METRICS)
+def test_each_metric_round_trips_as_json(db_session, column, make_model_version):
+    value = {
+        "overall": 0.91,
+        "per_class": {"LOW": 0.95, "HIGH": 0.84},
+        "folds": [0.9, 0.92, 0.91],
     }
-    version = make_model_version(evaluation_metrics=metrics)
+    version = make_model_version(**{column: value})
     db_session.add(version)
     db_session.commit()
     db_session.expire_all()
 
-    assert db_session.get(
-        ModelVersion, version.model_version_id
-    ).evaluation_metrics == (metrics)
+    assert getattr(db_session.get(ModelVersion, version.model_version_id), column) == (
+        value
+    )
 
 
 @pytest.mark.parametrize("status", list(ModelStatus))
@@ -100,16 +104,27 @@ def test_version_lists_its_inferences(
     assert inference.model_version_id == version.model_version_id
 
 
-def test_deleting_a_version_keeps_its_inferences_unlinked(
+def test_a_version_with_inferences_cannot_be_deleted(
     db_session, make_model_version, make_inference, make_sector
 ):
+    """model_version_id is required on an inference, so the database must
+    refuse to remove a model version that predictions still point to."""
     version = make_model_version()
     inference = make_inference(make_sector(), model_version=version)
     db_session.add_all([version, inference])
     db_session.commit()
 
     db_session.delete(version)
-    db_session.commit()
-    db_session.refresh(inference)
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
 
-    assert inference.model_version_id is None
+
+def test_a_version_without_inferences_can_be_deleted(db_session, make_model_version):
+    version = make_model_version()
+    db_session.add(version)
+    db_session.commit()
+
+    db_session.delete(version)
+    db_session.commit()
+    assert db_session.query(ModelVersion).count() == 0
