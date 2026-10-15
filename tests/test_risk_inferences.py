@@ -3,12 +3,16 @@ import os
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
 
 import pytest
+import uuid
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import StaticPool
 
 from database import Base, get_db
 from main import app
+from models.sectors import Sector
+from models.model_versions import ModelVersion
+from models._enums import GeologyClass, ModelStatus
 
 engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",
@@ -56,7 +60,33 @@ SECTOR_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
 
 @pytest.mark.asyncio
-async def test_risk_inference_workflow(client):
+async def test_risk_inference_workflow(client, db_session):
+    # Seed required referenced rows so foreign key constraints succeed
+    async with db_session.begin():
+        sector = Sector(
+            sector_id=uuid.UUID(SECTOR_ID),
+            province_name="Western",
+            district_name="Rutsiro",
+            sector_name="Boneza",
+            boundary_ref="POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))",
+            mean_slope_deg=15.5,
+            geology_class=GeologyClass.ALLUVIUM,
+            soil_features={"clay": 0.3},
+            land_cover_class="forest",
+        )
+        mv = ModelVersion(
+            model_version_id=uuid.UUID(MODEL_VERSION_ID),
+            model_name="landslide_risk_model",
+            version_code="v1.0.0",
+            model_type="random_forest",
+            model_path="/models/x.pkl",
+            precision={"o": 0.85},
+            recall={"o": 0.82},
+            f1_score={"o": 0.83},
+            model_status=ModelStatus.DEPLOYED,
+        )
+        db_session.add_all([sector, mv])
+
     payload = {
         "sector_id": SECTOR_ID,
         "model_version_id": MODEL_VERSION_ID,
