@@ -14,3 +14,5 @@ htmlcov/
 *.sqlite
 *.sqlite3
 .DS_Store
+*.pem.vscode/
+.vscode/
