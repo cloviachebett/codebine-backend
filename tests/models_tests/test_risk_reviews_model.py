@@ -1,3 +1,5 @@
+"""Tests for the RiskReview model."""
+
 import uuid
 
 import pytest

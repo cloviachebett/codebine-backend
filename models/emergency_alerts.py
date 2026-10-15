@@ -9,13 +9,13 @@ from database import Base
 
 
 class EmergencyAlert(Base):
-    __tablename__ = "emergency_alert"
+    __tablename__ = "emergency_alerts"
 
     alert_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     inference_id = Column(
-        Uuid, ForeignKey("risk_inference.inference_id"), nullable=False
+        Uuid, ForeignKey("risk_inferences.inference_id"), nullable=False
     )
-    sector_id = Column(Uuid, ForeignKey("sector.sector_id"), nullable=False)
+    sector_id = Column(Uuid, ForeignKey("sectors.sector_id"), nullable=False)
     alert_message = Column(Text, nullable=False)
     severity = Column(enum_column(AlertSeverity, "alert_severity_enum"), nullable=False)
     channel = Column(enum_column(AlertChannel, "alert_channel_enum"), nullable=False)
@@ -28,6 +28,7 @@ class EmergencyAlert(Base):
 
     inference = relationship("RiskInference", back_populates="emergency_alerts")
     sector = relationship("Sector", back_populates="emergency_alerts")
+
     risk_reviews = relationship(
         "RiskReview", back_populates="alert", cascade="all, delete-orphan"
     )

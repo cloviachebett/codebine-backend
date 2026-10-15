@@ -8,10 +8,10 @@ from database import Base
 
 
 class SystemAuditLog(Base):
-    __tablename__ = "system_audit_log"
+    __tablename__ = "system_audit_logs"
 
     log_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
-    user_id = Column(Uuid, ForeignKey("user.user_id"), nullable=True)
+    user_id = Column(Uuid, ForeignKey("users.user_id"), nullable=True)
     action_type = Column(String(100), nullable=False)
     entity_type = Column(String(100), nullable=False)
     entity_id = Column(String(64), nullable=True)

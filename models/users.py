@@ -9,7 +9,7 @@ from database import Base
 
 
 class User(Base):
-    __tablename__ = "user"
+    __tablename__ = "users"
 
     user_id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     full_name = Column(String(255), nullable=False)

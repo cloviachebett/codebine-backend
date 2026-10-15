@@ -1,3 +1,5 @@
+"""Tests for the PredictionFeature model."""
+
 import uuid
 
 import pytest

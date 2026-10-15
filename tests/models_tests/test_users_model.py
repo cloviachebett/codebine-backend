@@ -1,3 +1,5 @@
+"""Tests for the User model."""
+
 from datetime import datetime, timedelta, timezone
 
 import pytest

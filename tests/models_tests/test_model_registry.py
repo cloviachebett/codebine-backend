@@ -1,26 +1,29 @@
-import models
+"""Model registry: tables, exports, relationships and constraints."""
+
 from datetime import timezone
 
 import pytest
 from sqlalchemy import CheckConstraint, Enum
 from sqlalchemy.orm import configure_mappers
 
+import models
 from models._types import utcnow
 from database import Base
 
 EXPECTED_TABLES = {
-    "analyst_shift",
-    "emergency_alert",
-    "incident_report",
+    "users",
+    "risk_reviews",
+    "prediction_features",
+    "model_versions",
     "landslide_inventory",
-    "model_version",
-    "prediction_feature",
-    "rainfall_matrix_table",  # Fixed: Synchronized table name with model mapping
-    "risk_inference",
-    "risk_review",
-    "sector",
-    "system_audit_log",
-    "user",
+    "dataset_metadata",
+    "sectors",
+    "incident_reports",
+    "analyst_shifts",
+    "emergency_alerts",
+    "rainfall_matrices",
+    "risk_inferences",
+    "system_audit_logs",
 }
 
 
