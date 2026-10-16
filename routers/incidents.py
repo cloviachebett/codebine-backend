@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -12,12 +12,7 @@ router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 
 @router.post("", response_model=IncidentRead, status_code=status.HTTP_201_CREATED)
 def create_incident(payload: IncidentCreate, db: Session = Depends(get_db)):
-    report = incident_service.create_incident(db, payload)
-    if report is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unknown sector"
-        )
-    return report
+    return incident_service.create_incident(db, payload)
 
 
 @router.get("", response_model=list[IncidentRead])
@@ -31,9 +26,4 @@ def list_incidents(
 
 @router.get("/{report_id}", response_model=IncidentRead)
 def get_incident(report_id: UUID, db: Session = Depends(get_db)):
-    report = incident_service.get_incident(db, report_id)
-    if report is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Incident report not found"
-        )
-    return report
+    return incident_service.get_incident(db, report_id)

@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.incident_reports import IncidentReport
@@ -25,9 +26,11 @@ def to_read(report: IncidentReport) -> IncidentRead:
 
 def create_incident(
     db: Session, data: IncidentCreate, reporter_id: UUID | None = None
-) -> IncidentRead | None:
+) -> IncidentRead:
     if not incident_repository.sector_exists(db, data.sector_id):
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unknown sector"
+        )
     report = incident_repository.add_report(
         db,
         IncidentReport(
@@ -50,9 +53,13 @@ def create_incident(
     return get_incident(db, report.report_id)
 
 
-def get_incident(db: Session, report_id: UUID) -> IncidentRead | None:
+def get_incident(db: Session, report_id: UUID) -> IncidentRead:
     report = incident_repository.get_report(db, report_id)
-    return to_read(report) if report else None
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Incident report not found"
+        )
+    return to_read(report)
 
 
 def list_incidents(db: Session, limit: int, offset: int) -> list[IncidentRead]:
