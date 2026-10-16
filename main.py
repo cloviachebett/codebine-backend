@@ -3,9 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from routers.risk_inferences_router import router as risk_inferences_router
-
 from routers.incidents import router as incidents_router
-
 from config import settings
 from database import SessionLocal
 from routers.rainfall_matrices import router as rainfall_router
@@ -29,9 +27,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="TerraWatch", version="0.1.0", lifespan=lifespan)
 
 app.include_router(rainfall_router)
-app = FastAPI(title="TerraWatch", version="0.1.0")
 app.include_router(incidents_router)
-
 app.include_router(risk_inferences_router)
 
 
