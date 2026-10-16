@@ -16,6 +16,7 @@ dependencies = [
     "psycopg>=3.3.6",
     "greenlet>=2.0",
     "httpx>=0.24",
+    "asyncpg>=0.29",
 ]
 
 [dependency-groups]
