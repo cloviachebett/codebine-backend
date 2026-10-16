@@ -26,7 +26,6 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         try:
             cursor.execute("PRAGMA foreign_keys=ON;")
-            cursor.execute("PRAGMA ignore_check_constraints=OFF;")
         finally:
             cursor.close()
 
@@ -46,3 +45,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def create_tables():
+    Base.metadata.create_all(bind=engine)
