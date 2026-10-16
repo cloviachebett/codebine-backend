@@ -1,4 +1,5 @@
 import uuid
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from repositories.risk_inference_repository import risk_inference_repository
 
@@ -20,4 +21,10 @@ class RiskInferenceService:
         )
 
     def fetch_prediction(self, inference_id: uuid.UUID):
-        return self.repo.get_by_id(self.db, inference_id)
+        result = self.repo.get_by_id(self.db, inference_id)
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail="Prediction signature log entries not found.",
+            )
+        return result

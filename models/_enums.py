@@ -45,13 +45,6 @@ class LandslideSeverity(str, enum.Enum):
     HIGH = "HIGH"
 
 
-class IncidentStatus(str, enum.Enum):
-    SUBMITTED = "SUBMITTED"
-    UNDER_REVIEW = "UNDER_REVIEW"
-    VERIFIED = "VERIFIED"
-    REJECTED = "REJECTED"
-
-
 class UserRole(str, enum.Enum):
     ADMIN = "ADMIN"
     ANALYST = "ANALYST"

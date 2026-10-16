@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from routers.risk_inferences_router import router as risk_inferences_router
 
+from routers.incidents import router as incidents_router
+
 app = FastAPI(title="TerraWatch", version="0.1.0")
+app.include_router(incidents_router)
 
 app.include_router(risk_inferences_router)
 
