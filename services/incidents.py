@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from models.incident_reports import IncidentReport
 from models.system_audit_logs import SystemAuditLog
-from repositories import incidents as incident_repository
+from repositories.incidents import incident_repository
 from schemas.incidents import IncidentCreate, IncidentRead
 
 

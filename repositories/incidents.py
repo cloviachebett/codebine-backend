@@ -8,37 +8,41 @@ from models.sectors import Sector
 from models.system_audit_logs import SystemAuditLog
 
 
-def _with_names():
-    return select(IncidentReport).options(
-        joinedload(IncidentReport.sector),
-        joinedload(IncidentReport.reported_by_user),
-    )
+class IncidentRepository:
+    def __init__(self):
+        self.model = IncidentReport
+
+    def _with_names(self):
+        return select(self.model).options(
+            joinedload(self.model.sector),
+            joinedload(self.model.reported_by_user),
+        )
+
+    def sector_exists(self, db: Session, sector_id: UUID) -> bool:
+        return db.get(Sector, sector_id) is not None
+
+    def add_report(self, db: Session, report: IncidentReport) -> IncidentReport:
+        db.add(report)
+        db.flush()
+        return report
+
+    def add_audit_log(self, db: Session, log: SystemAuditLog) -> None:
+        db.add(log)
+
+    def get_report(self, db: Session, report_id: UUID) -> IncidentReport | None:
+        query = self._with_names().where(self.model.report_id == report_id)
+        return db.scalars(query).first()
+
+    def list_reports(
+        self, db: Session, limit: int, offset: int
+    ) -> list[IncidentReport]:
+        query = (
+            self._with_names()
+            .order_by(self.model.reported_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return list(db.scalars(query))
 
 
-def sector_exists(db: Session, sector_id: UUID) -> bool:
-    return db.get(Sector, sector_id) is not None
-
-
-def add_report(db: Session, report: IncidentReport) -> IncidentReport:
-    db.add(report)
-    db.flush()
-    return report
-
-
-def add_audit_log(db: Session, log: SystemAuditLog) -> None:
-    db.add(log)
-
-
-def get_report(db: Session, report_id: UUID) -> IncidentReport | None:
-    query = _with_names().where(IncidentReport.report_id == report_id)
-    return db.scalars(query).first()
-
-
-def list_reports(db: Session, limit: int, offset: int) -> list[IncidentReport]:
-    query = (
-        _with_names()
-        .order_by(IncidentReport.reported_at.desc())
-        .limit(limit)
-        .offset(offset)
-    )
-    return list(db.scalars(query))
+incident_repository = IncidentRepository()
