@@ -9,7 +9,10 @@ app.include_router(risk_inferences_router)
 
 @app.on_event("startup")
 async def startup():
-    await create_tables()
+    if hasattr(create_tables, "__await__"):
+        await create_tables()
+    else:
+        create_tables()
 
 
 @app.get("/health")
