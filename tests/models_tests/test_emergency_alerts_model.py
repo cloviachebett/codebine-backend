@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from models._enums import AlertChannel, AlertSeverity, AlertStatus
+from models._enums import AlertSeverity, AlertStatus
 from models.emergency_alerts import EmergencyAlert
 from models.risk_reviews import RiskReview
 
@@ -24,7 +24,6 @@ def test_alert_fields_round_trip(db_session, make_alert, make_inference, make_se
         make_inference(make_sector()),
         alert_message="Evacuate the lower slope.",
         severity=AlertSeverity.CRITICAL,
-        channel=AlertChannel.EMAIL,
         alert_status=AlertStatus.APPROVED,
     )
     db_session.add(alert)
@@ -34,11 +33,10 @@ def test_alert_fields_round_trip(db_session, make_alert, make_inference, make_se
     loaded = db_session.get(EmergencyAlert, alert.alert_id)
     assert loaded.alert_message == "Evacuate the lower slope."
     assert loaded.severity == AlertSeverity.CRITICAL
-    assert loaded.channel == AlertChannel.EMAIL
     assert loaded.alert_status == AlertStatus.APPROVED
 
 
-@pytest.mark.parametrize("column", ["alert_message", "severity", "channel"])
+@pytest.mark.parametrize("column", ["alert_message", "severity"])
 def test_required_columns_reject_null(
     db_session, column, make_alert, make_inference, make_sector
 ):
@@ -54,7 +52,6 @@ def test_alert_requires_an_inference(db_session, make_sector):
             sector=sector,
             alert_message="x",
             severity=AlertSeverity.HIGH,
-            channel=AlertChannel.SMS,
         )
     )
     with pytest.raises(IntegrityError):
@@ -78,7 +75,6 @@ def test_alert_inference_must_exist(db_session, make_sector):
             sector_id=sector.sector_id,
             alert_message="x",
             severity=AlertSeverity.HIGH,
-            channel=AlertChannel.SMS,
         )
     )
     with pytest.raises(IntegrityError):

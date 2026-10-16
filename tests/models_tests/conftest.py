@@ -15,7 +15,6 @@ from sqlalchemy.pool import StaticPool
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from models._enums import (
-    AlertChannel,
     AlertSeverity,
     DatasetFactorType,
     GeologyClass,
@@ -268,7 +267,6 @@ def make_alert():
             "sector": inference.sector,
             "alert_message": "High landslide risk forecast for the next 24 hours.",
             "severity": AlertSeverity.HIGH,
-            "channel": AlertChannel.SMS,
         }
         return EmergencyAlert(**{**defaults, **overrides})
 

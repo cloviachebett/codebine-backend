@@ -73,9 +73,3 @@ class AlertSeverity(str, enum.Enum):
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
-
-
-class AlertChannel(str, enum.Enum):
-    SMS = "SMS"
-    EMAIL = "EMAIL"
-    PUSH = "PUSH"
