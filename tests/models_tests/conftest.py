@@ -15,7 +15,6 @@ from sqlalchemy.pool import StaticPool
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from models._enums import (
-    AlertChannel,
     AlertSeverity,
     DatasetFactorType,
     GeologyClass,
@@ -268,7 +267,6 @@ def make_alert():
             "sector": inference.sector,
             "alert_message": "High landslide risk forecast for the next 24 hours.",
             "severity": AlertSeverity.HIGH,
-            "channel": AlertChannel.SMS,
         }
         return EmergencyAlert(**{**defaults, **overrides})
 
@@ -295,8 +293,6 @@ def make_incident():
         defaults = {
             "sector": sector,
             "event_date": datetime(2026, 4, 2, tzinfo=timezone.utc),
-            "latitude": Decimal("-1.944100"),
-            "longitude": Decimal("30.061900"),
             "description": "Slope failure blocked the road above the market.",
         }
         return IncidentReport(**{**defaults, **overrides})
