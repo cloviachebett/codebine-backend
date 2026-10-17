@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import Column, DateTime, ForeignKey, Text, Uuid
 from sqlalchemy.orm import relationship
 
-from models._enums import AlertChannel, AlertSeverity, AlertStatus
+from models._enums import AlertSeverity, AlertStatus
 from models._types import enum_column, utcnow
 from database import Base
 
@@ -18,7 +18,6 @@ class EmergencyAlert(Base):
     sector_id = Column(Uuid, ForeignKey("sectors.sector_id"), nullable=False)
     alert_message = Column(Text, nullable=False)
     severity = Column(enum_column(AlertSeverity, "alert_severity_enum"), nullable=False)
-    channel = Column(enum_column(AlertChannel, "alert_channel_enum"), nullable=False)
     alert_status = Column(
         enum_column(AlertStatus, "alert_status_enum"),
         nullable=False,
