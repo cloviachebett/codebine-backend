@@ -9,6 +9,13 @@ from database import SessionLocal
 from routers.rainfall_matrices import router as rainfall_router
 from services.scheduler import rainfall_sync_loop
 
+from routers.alerts import router as alerts_router
+from routers.reviews import router as reviews_router
+
+app = FastAPI(title="TerraWatch", version="0.1.0")
+app.include_router(incidents_router)
+app.include_router(alerts_router)
+app.include_router(reviews_router)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
