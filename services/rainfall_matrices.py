@@ -119,7 +119,7 @@ class RainfallService:
         start: date | None = None,
         end: date | None = None,
     ) -> dict[str, Any]:
-        """HTTP-facing sync: runs ``run_sync`` and turns its errors into HTTP responses."""
+        #HTTP-facing sync: runs ,run_sync and turns its errors into HTTP responses.
         if start and end and start > end:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST, detail="start_date is after end_date"
