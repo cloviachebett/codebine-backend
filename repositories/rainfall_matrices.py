@@ -9,7 +9,7 @@ from models.rainfall_matrices import RainfallMatrix
 
 
 def utc_date(value: datetime) -> date:
-    #Calendar date of a stored timestamp, independent of the DB session time zone.
+    # Calendar date of a stored timestamp, independent of the DB session time zone.
     if value.tzinfo is not None:
         value = value.astimezone(timezone.utc)
     return value.date()
@@ -58,11 +58,10 @@ class RainfallMatrixRepository:
         rows: list[dict[str, Any]],
         dataset_id: UUID | None = None,
     ) -> tuple[int, int]:
-        #Insert new (sector, day) rows and update existing ones.
+        # Insert new (sector, day) rows and update existing ones.
 
-        #Returns (inserted, updated). Only the days in rows are touched.
-        
-        
+        # Returns (inserted, updated). Only the days in rows are touched.
+
         if not rows:
             return 0, 0
         times = [r["observation_time"] for r in rows]
