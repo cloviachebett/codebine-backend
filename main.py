@@ -20,6 +20,7 @@ app.include_router(incidents_router)
 app.include_router(alerts_router)
 app.include_router(reviews_router)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     stop_event = asyncio.Event()
