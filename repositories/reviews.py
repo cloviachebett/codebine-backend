@@ -27,8 +27,9 @@ class ReviewRepository:
         db.flush()
         return review
 
-    def add_audit_log(self, db: Session, log: SystemAuditLog) -> None:
+    def commit_with_audit_log(self, db: Session, log: SystemAuditLog) -> None:
         db.add(log)
+        db.commit()
 
     def get_review(self, db: Session, review_id: UUID) -> RiskReview | None:
         query = self._with_reviewer().where(self.model.review_id == review_id)

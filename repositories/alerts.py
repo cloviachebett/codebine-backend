@@ -38,8 +38,9 @@ class AlertRepository:
         db.flush()
         return alert
 
-    def add_audit_log(self, db: Session, log: SystemAuditLog) -> None:
+    def commit_with_audit_log(self, db: Session, log: SystemAuditLog) -> None:
         db.add(log)
+        db.commit()
 
     def get_alert(self, db: Session, alert_id: UUID) -> EmergencyAlert | None:
         query = self._with_details().where(self.model.alert_id == alert_id)

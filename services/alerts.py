@@ -61,7 +61,7 @@ def create_alert(db: Session, data: AlertCreate) -> AlertRead:
             ),
         ),
     )
-    alert_repository.add_audit_log(
+    alert_repository.commit_with_audit_log(
         db,
         SystemAuditLog(
             action_type="EMERGENCY_ALERT_CREATED",
@@ -69,7 +69,6 @@ def create_alert(db: Session, data: AlertCreate) -> AlertRead:
             entity_id=str(alert.alert_id),
         ),
     )
-    db.commit()
     return get_alert(db, alert.alert_id)
 
 

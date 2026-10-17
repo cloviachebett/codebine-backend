@@ -51,7 +51,7 @@ def create_review(db: Session, data: ReviewCreate, reviewer_id: UUID) -> ReviewR
             comments=data.comments or None,
         ),
     )
-    review_repository.add_audit_log(
+    review_repository.commit_with_audit_log(
         db,
         SystemAuditLog(
             user_id=reviewer_id,
@@ -61,7 +61,6 @@ def create_review(db: Session, data: ReviewCreate, reviewer_id: UUID) -> ReviewR
             execution_details={"decision": data.decision.value},
         ),
     )
-    db.commit()
     return to_read(review_repository.get_review(db, review.review_id))
 
 
