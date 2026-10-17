@@ -295,8 +295,6 @@ def make_incident():
         defaults = {
             "sector": sector,
             "event_date": datetime(2026, 4, 2, tzinfo=timezone.utc),
-            "latitude": Decimal("-1.944100"),
-            "longitude": Decimal("30.061900"),
             "description": "Slope failure blocked the road above the market.",
         }
         return IncidentReport(**{**defaults, **overrides})

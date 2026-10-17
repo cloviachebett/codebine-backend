@@ -1,12 +1,12 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas.prediction_feature_schema import (
     PredictionFeatureCreate,
     PredictionFeatureResponse,
 )
-from repositories.prediction_feature_repository import prediction_feature_repository
+from services.prediction_feature_service import PredictionFeatureService
 
 router = APIRouter(prefix="/analytics/features", tags=["Prediction Features"])
 
@@ -17,26 +17,11 @@ router = APIRouter(prefix="/analytics/features", tags=["Prediction Features"])
 def save_feature_snapshot(
     payload: PredictionFeatureCreate, db: Session = Depends(get_db)
 ):
-    existing = prediction_feature_repository.get_by_inference_id(
-        db, payload.inference_id
-    )
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="A prediction feature snapshot already exists for this inference ID.",
-        )
-
-    return prediction_feature_repository.create(
-        db, payload.inference_id, payload.historical_features
-    )
+    service = PredictionFeatureService(db)
+    return service.save_snapshot(payload.inference_id, payload.historical_features)
 
 
 @router.get("/inference/{inference_id}", response_model=PredictionFeatureResponse)
 def get_feature_snapshot(inference_id: uuid.UUID, db: Session = Depends(get_db)):
-    result = prediction_feature_repository.get_by_inference_id(db, inference_id)
-    if not result:
-        raise HTTPException(
-            status_code=404,
-            detail="No historical feature matrix snapshot found for this inference record.",
-        )
-    return result
+    service = PredictionFeatureService(db)
+    return service.fetch_snapshot_by_inference(inference_id)
