@@ -12,7 +12,7 @@ from schemas.rainfall_matrices import (
 )
 from services.rainfall_matrices import rainfall_service
 
-router = APIRouter(prefix="/rainfall", tags=["Rainfall"])
+router = APIRouter(prefix="/api/v1/rainfall", tags=["Rainfall"])
 
 
 @router.get("/matrices", response_model=list[RainfallMatrixRead])

@@ -2,23 +2,15 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from routers.risk_inferences_router import router as risk_inferences_router
-from routers.incidents import router as incidents_router
-from config import settings
-from database import SessionLocal
-from routers.rainfall_matrices import router as rainfall_router
-from services.scheduler import rainfall_sync_loop
-
 from routers.incidents import router as incidents_router
 from routers.prediction_features_router import router as prediction_features_router
 from routers.risk_inferences_router import router as risk_inferences_router
 from routers.alerts import router as alerts_router
 from routers.reviews import router as reviews_router
-
-app = FastAPI(title="TerraWatch", version="0.1.0")
-app.include_router(incidents_router)
-app.include_router(alerts_router)
-app.include_router(reviews_router)
+from routers.rainfall_matrices import router as rainfall_router
+from config import settings
+from database import SessionLocal
+from services.scheduler import rainfall_sync_loop
 
 
 @asynccontextmanager
@@ -36,11 +28,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="TerraWatch", version="0.1.0", lifespan=lifespan)
-
-app.include_router(rainfall_router)
 app.include_router(incidents_router)
+app.include_router(alerts_router)
+app.include_router(reviews_router)
 app.include_router(risk_inferences_router)
 app.include_router(prediction_features_router)
+app.include_router(rainfall_router)
 
 
 @app.get("/health")
