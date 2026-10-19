@@ -1,7 +1,6 @@
 import uuid
 from datetime import datetime
-
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 
 class PredictionFeatureCreate(BaseModel):
@@ -14,4 +13,6 @@ class PredictionFeatureResponse(BaseModel):
     inference_id: uuid.UUID
     historical_features: dict
     created_at: datetime
-    model_config = ConfigDict(from_attributes=True)
+
+    class Config:
+        from_attributes = True
