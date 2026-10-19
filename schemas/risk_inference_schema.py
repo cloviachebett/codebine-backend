@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from pydantic import BaseModel
+
+from pydantic import BaseModel, ConfigDict
 
 
 class RiskInferenceCreate(BaseModel):
@@ -18,5 +19,4 @@ class RiskInferenceResponse(BaseModel):
     risk_level: str
     risk_score: float
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

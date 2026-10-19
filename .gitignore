@@ -16,3 +16,7 @@ htmlcov/
 .DS_Store
 *.pem.vscode/
 .vscode/
+
+credentials/
+gee-service-account.json
+*.json
