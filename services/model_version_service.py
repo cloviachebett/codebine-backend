@@ -20,7 +20,7 @@ class ModelVersionService:
         self.db = db
 
     def _get_model(self, model_record):
-        #Get model from cache, loading if needed.
+        # Get model from cache, loading if needed.
         if model_record.model_version_id not in ModelVersionService._loaded_model_cache:
             ModelVersionService._loaded_model_cache[model_record.model_version_id] = (
                 self._load_model(model_record)
@@ -30,14 +30,14 @@ class ModelVersionService:
     def _load_model(self, model_record):
         # Load a model from disk, resolving paths safely inside the project.
         pkl_path = str(model_record.model_path)
-        
+
         if os.path.isabs(pkl_path) and pkl_path.startswith("/assets/"):
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             pkl_path = os.path.join(project_root, pkl_path.lstrip("/"))
         elif not os.path.isabs(pkl_path):
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             pkl_path = os.path.join(project_root, pkl_path.lstrip("/"))
-        
+
         if not os.path.exists(pkl_path):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
