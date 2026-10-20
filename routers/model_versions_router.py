@@ -6,6 +6,7 @@ from schemas.model_version_schema import (
     ModelVersionCreate,
     ModelVersionResponse,
     PredictFromRainfallRequest,
+    PredictResponse,
 )
 from services.model_version_service import ModelVersionService
 
@@ -26,15 +27,20 @@ def get_model_version(model_version_id: uuid.UUID, db: Session = Depends(get_db)
     return service.fetch_version(model_version_id)
 
 
-@router.post("/{model_version_id}/predict-from-rainfall")
+@router.post(
+    "/{model_version_id}/predict-from-rainfall",
+    response_model=PredictResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def predict_from_rainfall(
     model_version_id: uuid.UUID,
     payload: PredictFromRainfallRequest,
     db: Session = Depends(get_db),
 ):
     service = ModelVersionService(db)
-    return service.predict_from_rainfall(
+    result = service.predict_from_rainfall(
         model_version_id,
         payload.sector_id,
-        payload.rainfall_observations,
+        [obs.model_dump() for obs in payload.rainfall_observations],
     )
+    return result
