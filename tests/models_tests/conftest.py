@@ -9,9 +9,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# The test suite must NEVER touch the real Postgres development database.
-# Setting DATABASE_URL before importing `database`/`main` makes sure the
-# app itself is wired up against SQLite for the whole test session.
+
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from models._enums import (
@@ -46,8 +44,7 @@ engine = create_engine(
 
 @event.listens_for(engine, "connect")
 def _enforce_foreign_keys(dbapi_connection, _record):
-    """SQLite ignores foreign keys unless asked, but the model tests rely on
-    them (RESTRICT / CASCADE / 'must exist' checks)."""
+
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
@@ -107,9 +104,18 @@ def make_sector():
 
     def _factory(**overrides):
         n = _n()
+        district_names = [
+            "Rubavu",
+            "Nyabihu",
+            "Karongi",
+            "Ngororero",
+            "Nyamasheke",
+            "Rusizi",
+            "Rutsiro",
+        ]
         defaults = {
-            "province_name": "Western",
-            "district_name": f"District {n}",
+            "province_name": "Western Province",
+            "district_name": district_names[n % len(district_names)],
             "sector_name": f"Sector {n}",
             "boundary_ref": f"boundaries/sector_{n}.geojson",
             "mean_slope_deg": Decimal("23.50"),
