@@ -21,6 +21,7 @@ from database import Base, get_db
 from main import app
 from services.chirps_gee import SectorArea  # noqa: F401
 from services.rainfall_math import iter_days
+import services.rainfall_matrices as rainfall_module
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -44,6 +45,18 @@ def _fresh_database():
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _chirps_environment(monkeypatch):
+    """CHIRPS/GEE settings are read straight from the environment now
+    (see services/chirps_gee.py), so the test env is pinned here."""
+    monkeypatch.setenv("CHIRPS_ID", "TEST/COLLECTION")
+    monkeypatch.setenv("CHIRPS_SCALE_M", "5566")
+    monkeypatch.setenv("GEE_MAX_FEATURES_PER_REQUEST", "4000")
+    monkeypatch.setenv("GEE_PROJECT", "")
+    monkeypatch.setenv("GEE_PRIVATE_KEY_PATH", "")
+    monkeypatch.setenv("GEE_SERVICE_ACCOUNT_EMAIL", "")
 
 
 @pytest.fixture
@@ -148,20 +161,17 @@ def make_rainfall():
 
 
 @pytest.fixture
-def rainfall_settings():
-    """Settings for the rainfall service/CHIRPS service in tests (never touches .env)."""
-    return SimpleNamespace(
+def rainfall_settings(monkeypatch):
+    """Settings for the rainfall service in tests (never touches .env)."""
+    settings = SimpleNamespace(
         chirps_collection="TEST/COLLECTION",
-        chirps_scale_m=5566,
-        gee_max_features_per_request=4000,
-        gee_project="",
-        gee_private_key_path="",
-        gee_service_account_email="",
-        boundary_base_dir=".",
         boundary_sector_property="ADM3_EN",
         boundary_district_property="ADM2_EN",
         rainfall_sync_lookback_days=3,
     )
+    # The router talks to a module-level singleton; keep it on the test settings.
+    monkeypatch.setattr(rainfall_module.rainfall_service, "settings", settings)
+    return settings
 
 
 SPIKE = date(2024, 3, 10)

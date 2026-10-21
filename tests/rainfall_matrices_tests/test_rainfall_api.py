@@ -106,7 +106,9 @@ def test_sync_rejects_start_after_end(client):
     assert response.status_code == 400
 
 
-def test_sync_end_to_end_with_fake_chirps(client, add_sector, monkeypatch, fake_chirps):
+def test_sync_end_to_end_with_fake_chirps(
+    client, add_sector, monkeypatch, fake_chirps, rainfall_settings
+):
     sector = add_sector()
     monkeypatch.setattr(
         rainfall_module, "CHIRPSGEEService", lambda **kwargs: fake_chirps()

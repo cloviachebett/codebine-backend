@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Sequence
+
+from dotenv import load_dotenv
 
 from services.rainfall_math import chunk_days, days_per_chunk
 
@@ -13,6 +16,9 @@ try:
     import ee
 except ImportError:
     ee = None
+
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +36,17 @@ class SectorArea:
 class CHIRPSGEEService:
     """Fetch daily CHIRPS rainfall for sectors using Google Earth Engine."""
 
-    def __init__(self, settings=None, ee_module=ee):
-        if settings is None:
-            from config import settings as default_settings
-
-            settings = default_settings
-
-        self.settings = settings
+    def __init__(self, ee_module=ee):
         self._ee = ee_module
         self._initialized = False
-        self.collection = settings.chirps_collection
-        self.scale = settings.chirps_scale_m
-        self.max_features = settings.gee_max_features_per_request
+
+        self.chirps_id = os.environ["CHIRPS_ID"]
+        self.scale = int(os.environ["CHIRPS_SCALE_M"])
+        self.max_features = int(os.environ["GEE_MAX_FEATURES_PER_REQUEST"])
+        self.gee_project = os.getenv("GEE_PROJECT")
+        self.gee_private_key_path = os.getenv("GEE_PRIVATE_KEY_PATH")
+        self.gee_service_account_email = os.getenv("GEE_SERVICE_ACCOUNT_EMAIL")
+
         self.unresolved: list[tuple[str, date]] = []
 
     def initialize(self) -> None:
@@ -50,14 +55,15 @@ class CHIRPSGEEService:
 
         if self._ee is None:
             raise RuntimeError(
-                "earthengine-api is not installed; install it and configure GEE credentials."
+                "earthengine-api is not installed; "
+                "install it and configure GEE credentials."
             )
 
         try:
             kwargs = {}
 
-            if self.settings.gee_project:
-                kwargs["project"] = self.settings.gee_project
+            if self.gee_project:
+                kwargs["project"] = self.gee_project
 
             credentials = self._credentials()
 
@@ -74,7 +80,7 @@ class CHIRPSGEEService:
         self._initialized = True
 
     def _credentials(self):
-        path = self.settings.gee_private_key_path
+        path = self.gee_private_key_path
 
         if not path:
             return None
@@ -85,7 +91,8 @@ class CHIRPSGEEService:
             raise RuntimeError(f"GEE key file not found: {key_path}")
 
         key_text = key_path.read_text()
-        email = self.settings.gee_service_account_email or json.loads(key_text).get(
+
+        email = self.gee_service_account_email or json.loads(key_text).get(
             "client_email"
         )
 
@@ -94,32 +101,38 @@ class CHIRPSGEEService:
                 "No GEE service account email configured or found in the key file."
             )
 
-        return self._ee.ServiceAccountCredentials(email, key_data=key_text)
+        return self._ee.ServiceAccountCredentials(
+            email,
+            key_data=key_text,
+        )
 
     def latest_available_date(self) -> date:
-        """Return the latest date available in the CHIRPS collection."""
         self.initialize()
 
         try:
             millis = (
-                self._ee.ImageCollection(self.collection)
+                self._ee.ImageCollection(self.chirps_id)
                 .aggregate_max("system:time_start")
                 .getInfo()
             )
+
         except (self._ee.EEException, OSError) as exc:
             raise RuntimeError(f"Could not read the latest CHIRPS date: {exc}") from exc
 
         if millis is None:
-            raise RuntimeError(
-                f"CHIRPS collection {self.collection} returned no images."
-            )
+            raise RuntimeError(f"CHIRPS  {self.chirps_id} returned no images.")
 
-        return datetime.fromtimestamp(millis / 1000, tz=timezone.utc).date()
+        return datetime.fromtimestamp(
+            millis / 1000,
+            tz=timezone.utc,
+        ).date()
 
     def fetch_daily_rainfall(
-        self, areas: Sequence[SectorArea], start: date, end: date
+        self,
+        areas: Sequence[SectorArea],
+        start: date,
+        end: date,
     ) -> dict[str, dict[date, float]]:
-        """Return daily rainfall in millimetres for each sector."""
         if start > end:
             raise ValueError("start must not be after end")
 
@@ -136,7 +149,12 @@ class CHIRPSGEEService:
         for chunk_start, chunk_end in chunk_days(start, end, step):
             targets = [(area.sector_id, area.geometry) for area in areas]
 
-            rows = self._reduce_chunk(targets, chunk_start, chunk_end)
+            rows = self._reduce_chunk(
+                targets,
+                chunk_start,
+                chunk_end,
+            )
+
             missing: set[tuple[str, date]] = set()
 
             for sector_id, day, mm in rows:
@@ -163,7 +181,11 @@ class CHIRPSGEEService:
                     if area.sector_id in missing_ids
                 ]
 
-                fallback_rows = self._reduce_chunk(points, chunk_start, chunk_end)
+                fallback_rows = self._reduce_chunk(
+                    points,
+                    chunk_start,
+                    chunk_end,
+                )
 
                 for sector_id, day, mm in fallback_rows:
                     if mm is not None and (sector_id, day) in missing:
@@ -181,7 +203,10 @@ class CHIRPSGEEService:
         return result
 
     def _reduce_chunk(
-        self, targets: Sequence[tuple[str, dict]], start: date, end: date
+        self,
+        targets: Sequence[tuple[str, dict]],
+        start: date,
+        end: date,
     ) -> list[tuple[str, date, float | None]]:
         ee_ = self._ee
 
@@ -197,7 +222,7 @@ class CHIRPSGEEService:
             )
 
             images = (
-                ee_.ImageCollection(self.collection)
+                ee_.ImageCollection(self.chirps_id)
                 .filterDate(
                     start.isoformat(),
                     (end + timedelta(days=1)).isoformat(),
@@ -226,6 +251,7 @@ class CHIRPSGEEService:
                 )
 
             table = ee_.FeatureCollection(images.map(per_image)).flatten()
+
             info = table.getInfo()
 
         except (ee_.EEException, OSError) as exc:
