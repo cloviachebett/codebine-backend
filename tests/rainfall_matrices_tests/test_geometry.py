@@ -1,6 +1,5 @@
 import pytest
 
-from services.errors import InvalidGeometryError
 from services.geometry import compute_centroid, validate_geometry
 
 SQUARE = {
@@ -34,7 +33,7 @@ def test_polygon_and_multipolygon_are_valid():
     ],
 )
 def test_invalid_geometry_is_rejected(bad):
-    with pytest.raises(InvalidGeometryError):
+    with pytest.raises(ValueError):
         validate_geometry(bad)
 
 

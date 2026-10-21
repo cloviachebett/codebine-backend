@@ -3,7 +3,6 @@ from datetime import date
 import pytest
 
 from services.chirps_gee import CHIRPSGEEService, SectorArea
-from services.errors import ChirpsFetchError
 
 
 class ScriptedService(CHIRPSGEEService):
@@ -119,7 +118,7 @@ def test_latest_available_date_comes_from_the_collection(rainfall_settings):
     assert service.latest_available_date() == date(2024, 3, 31)
 
 
-def test_earth_engine_errors_become_chirps_fetch_error(rainfall_settings):
+def test_earth_engine_errors_become_a_runtime_error(rainfall_settings):
     class FakeEE:
         class EEException(Exception):
             pass
@@ -130,13 +129,13 @@ def test_earth_engine_errors_become_chirps_fetch_error(rainfall_settings):
 
     service = CHIRPSGEEService(settings=rainfall_settings, ee_module=FakeEE)
     service._initialized = True
-    with pytest.raises(ChirpsFetchError, match="quota exceeded"):
+    with pytest.raises(RuntimeError, match="quota exceeded"):
         service.latest_available_date()
 
 
 def test_missing_earth_engine_is_a_clear_error(rainfall_settings):
     service = CHIRPSGEEService(settings=rainfall_settings, ee_module=None)
-    with pytest.raises(ChirpsFetchError, match="not installed"):
+    with pytest.raises(RuntimeError, match="not installed"):
         service.fetch_daily_rainfall([area("a")], date(2024, 1, 1), date(2024, 1, 2))
 
 
@@ -152,5 +151,5 @@ def test_missing_key_file_is_an_error_not_silently_ignored(rainfall_settings, tm
             raise AssertionError("must not initialise without the key file")
 
     service = CHIRPSGEEService(settings=rainfall_settings, ee_module=FakeEE)
-    with pytest.raises(ChirpsFetchError, match="key file not found"):
+    with pytest.raises(RuntimeError, match="key file not found"):
         service.initialize()

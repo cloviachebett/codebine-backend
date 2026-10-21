@@ -6,12 +6,6 @@ from decimal import Decimal
 import pytest
 
 import services.rainfall_matrices as rainfall_module
-from services.errors import (
-    ChirpsFetchError,
-    InvalidDateRangeError,
-    InvalidGeometryError,
-    SectorNotFoundError,
-)
 from services.rainfall_matrices import RainfallService
 
 
@@ -89,10 +83,10 @@ def test_invalid_sector_id_is_422_not_500(client):
 @pytest.mark.parametrize(
     "error, expected",
     [
-        (SectorNotFoundError("no such sector"), 404),
-        (InvalidGeometryError("bad boundary"), 400),
-        (InvalidDateRangeError("bad range"), 400),
-        (ChirpsFetchError("gee down"), 502),
+        (LookupError("no such sector"), 404),
+        (ValueError("bad boundary"), 400),
+        (ValueError("bad range"), 400),
+        (RuntimeError("gee down"), 502),
     ],
 )
 def test_sync_maps_service_errors_to_http_codes(client, monkeypatch, error, expected):

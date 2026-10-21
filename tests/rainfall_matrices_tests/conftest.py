@@ -20,7 +20,6 @@ from models.sectors import Sector
 from database import Base, get_db
 from main import app
 from services.chirps_gee import SectorArea  # noqa: F401
-from services.errors import ChirpsFetchError
 from services.rainfall_math import iter_days
 
 engine = create_engine(
@@ -185,7 +184,7 @@ class FakeChirps:
     def fetch_daily_rainfall(self, areas, start, end):
         self.calls.append({"start": start, "end": end, "areas": list(areas)})
         if self.fail:
-            raise ChirpsFetchError("Earth Engine is down")
+            raise RuntimeError("Earth Engine is down")
         return {
             a.sector_id: {
                 d: (self.spike_mm if d == SPIKE else 0.0)

@@ -12,12 +12,6 @@ from models.dataset_metadata import DatasetMetadata
 from models.rainfall_matrices import RainfallMatrix
 from models.system_audit_logs import SystemAuditLog
 from repositories.rainfall_matrices import utc_date
-from services.errors import (
-    ChirpsFetchError,
-    InvalidDateRangeError,
-    InvalidGeometryError,
-    SectorNotFoundError,
-)
 from services.rainfall_matrices import RainfallService
 
 
@@ -162,7 +156,7 @@ def test_start_after_latest_chirps_is_an_error(
     db_session, rainfall_settings, add_sector, fake_chirps
 ):
     add_sector()
-    with pytest.raises(InvalidDateRangeError):
+    with pytest.raises(ValueError):
         make_service(rainfall_settings, fake_chirps()).run_sync(
             db_session, start=date(2024, 4, 5), end=date(2024, 4, 6)
         )
@@ -184,10 +178,10 @@ def test_unknown_sector_and_empty_database_raise_not_found(
     db_session, rainfall_settings, add_sector, fake_chirps
 ):
     service = make_service(rainfall_settings, fake_chirps())
-    with pytest.raises(SectorNotFoundError):
+    with pytest.raises(LookupError):
         service.run_sync(db_session)  # no sectors yet
     add_sector()
-    with pytest.raises(SectorNotFoundError):
+    with pytest.raises(LookupError):
         service.run_sync(db_session, sector_ids=[uuid4()])
 
 
@@ -196,13 +190,13 @@ def test_invalid_geometry_is_reported_not_replaced_by_a_province_polygon(
 ):
     add_sector(boundary_ref='{"type": "Point", "coordinates": [29.0, -2.9]}')
     chirps = fake_chirps()
-    with pytest.raises(InvalidGeometryError, match="unsupported geometry"):
+    with pytest.raises(ValueError, match="must be coordinates"):
         make_service(rainfall_settings, chirps).run_sync(db_session)
     assert chirps.calls == []  # nothing was fetched
 
 
-def test_boundary_ref_can_be_a_geojson_file_shared_by_many_sectors(
-    db_session, rainfall_settings, add_sector, fake_chirps, tmp_path
+def test_boundary_ref_can_be_a_geojson_collection_shared_by_many_sectors(
+    db_session, rainfall_settings, add_sector, fake_chirps
 ):
     a_poly = {
         "type": "Polygon",
@@ -216,35 +210,32 @@ def test_boundary_ref_can_be_a_geojson_file_shared_by_many_sectors(
             [[30.0, -2.0], [30.1, -2.0], [30.1, -1.9], [30.0, -1.9], [30.0, -2.0]]
         ],
     }
-    (tmp_path / "nisr_sectors.geojson").write_text(
-        json.dumps(
-            {
-                "type": "FeatureCollection",
-                "features": [
-                    {
-                        "type": "Feature",
-                        "properties": {"ADM3_EN": "Gisenyi", "ADM2_EN": "Rubavu"},
-                        "geometry": a_poly,
-                    },
-                    {
-                        "type": "Feature",
-                        "properties": {"ADM3_EN": "Kanama", "ADM2_EN": "Rubavu"},
-                        "geometry": b_poly,
-                    },
-                ],
-            }
-        )
+    shared = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {"ADM3_EN": "Gisenyi", "ADM2_EN": "Rubavu"},
+                    "geometry": a_poly,
+                },
+                {
+                    "type": "Feature",
+                    "properties": {"ADM3_EN": "Kanama", "ADM2_EN": "Rubavu"},
+                    "geometry": b_poly,
+                },
+            ],
+        }
     )
-    rainfall_settings.boundary_base_dir = str(tmp_path)
     gisenyi = add_sector(
         sector_name="Gisenyi",
         district_name="Rubavu",
-        boundary_ref="nisr_sectors.geojson",
+        boundary_ref=shared,
     )
     kanama = add_sector(
         sector_name="Kanama",
         district_name="Rubavu",
-        boundary_ref="nisr_sectors.geojson",
+        boundary_ref=shared,
     )
 
     chirps = fake_chirps()
@@ -287,7 +278,7 @@ def test_failed_fetch_marks_dataset_failed_and_reraises(
     db_session, rainfall_settings, add_sector, fake_chirps
 ):
     add_sector()
-    with pytest.raises(ChirpsFetchError):
+    with pytest.raises(RuntimeError):
         make_service(rainfall_settings, fake_chirps(fail=True)).run_sync(db_session)
 
     assert (
@@ -420,7 +411,7 @@ def test_status_reports_chirps_failure_as_502(
 ):
     class Broken(fake_chirps):
         def latest_available_date(self):
-            raise ChirpsFetchError("down")
+            raise RuntimeError("down")
 
     with pytest.raises(HTTPException) as excinfo:
         make_service(rainfall_settings, Broken()).get_status(

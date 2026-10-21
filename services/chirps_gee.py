@@ -7,7 +7,6 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Sequence
 
-from services.errors import ChirpsFetchError
 from services.rainfall_math import chunk_days, days_per_chunk
 
 try:
@@ -29,13 +28,14 @@ class SectorArea:
 
 
 class CHIRPSGEEService:
-    """Daily CHIRPS rainfall (mm/day) per sector via Google Earth Engine."""
+    """Fetch daily CHIRPS rainfall for sectors using Google Earth Engine."""
 
     def __init__(self, settings=None, ee_module=ee):
         if settings is None:
             from config import settings as default_settings
 
             settings = default_settings
+
         self.settings = settings
         self._ee = ee_module
         self._initialized = False
@@ -47,45 +47,59 @@ class CHIRPSGEEService:
     def initialize(self) -> None:
         if self._initialized:
             return
+
         if self._ee is None:
-            raise ChirpsFetchError(
-                "earthengine-api is not installed; install it and configure the GEE credentials."
+            raise RuntimeError(
+                "earthengine-api is not installed; install it and configure GEE credentials."
             )
+
         try:
             kwargs = {}
+
             if self.settings.gee_project:
                 kwargs["project"] = self.settings.gee_project
+
             credentials = self._credentials()
+
             if credentials is not None:
                 kwargs["credentials"] = credentials
+
             self._ee.Initialize(**kwargs)
+
         except (self._ee.EEException, OSError, ValueError) as exc:
-            raise ChirpsFetchError(
+            raise RuntimeError(
                 f"Could not initialise Google Earth Engine: {exc}"
             ) from exc
+
         self._initialized = True
 
     def _credentials(self):
         path = self.settings.gee_private_key_path
+
         if not path:
             return None
+
         key_path = Path(path).expanduser()
+
         if not key_path.exists():
-            raise ChirpsFetchError(f"GEE key file not found: {key_path}")
+            raise RuntimeError(f"GEE key file not found: {key_path}")
+
         key_text = key_path.read_text()
-        email = self.settings.gee_service_account_email or json.loads(key_text).get(
-            "client_email"
-        )
+        email = self.settings.gee_service_account_email or json.loads(
+            key_text
+        ).get("client_email")
+
         if not email:
-            raise ChirpsFetchError(
+            raise RuntimeError(
                 "No GEE service account email configured or found in the key file."
             )
+
         return self._ee.ServiceAccountCredentials(email, key_data=key_text)
 
-    # public API
     def latest_available_date(self) -> date:
-        """Most recent day CHIRPS currently has data for (it lags real time)."""
+        """Return the latest date available in the CHIRPS collection."""
         self.initialize()
+
         try:
             millis = (
                 self._ee.ImageCollection(self.collection)
@@ -93,33 +107,46 @@ class CHIRPSGEEService:
                 .getInfo()
             )
         except (self._ee.EEException, OSError) as exc:
-            raise ChirpsFetchError(
+            raise RuntimeError(
                 f"Could not read the latest CHIRPS date: {exc}"
             ) from exc
+
         if millis is None:
-            raise ChirpsFetchError(
+            raise RuntimeError(
                 f"CHIRPS collection {self.collection} returned no images."
             )
-        return datetime.fromtimestamp(millis / 1000, tz=timezone.utc).date()
+
+        return datetime.fromtimestamp(
+            millis / 1000, tz=timezone.utc
+        ).date()
 
     def fetch_daily_rainfall(
         self, areas: Sequence[SectorArea], start: date, end: date
     ) -> dict[str, dict[date, float]]:
-        """{sector_id: {day: mm}} for start..end inclusive, one Earth Engine call per day-chunk."""
+        """Return daily rainfall in millimetres for each sector."""
         if start > end:
             raise ValueError("start must not be after end")
+
         self.initialize()
         self.unresolved = []
-        result: dict[str, dict[date, float]] = {a.sector_id: {} for a in areas}
+
+        result: dict[str, dict[date, float]] = {
+            area.sector_id: {} for area in areas
+        }
+
         if not areas:
             return result
 
         step = days_per_chunk(len(areas), self.max_features)
+
         for chunk_start, chunk_end in chunk_days(start, end, step):
-            rows = self._reduce_chunk(
-                [(a.sector_id, a.geometry) for a in areas], chunk_start, chunk_end
-            )
+            targets = [
+                (area.sector_id, area.geometry) for area in areas
+            ]
+
+            rows = self._reduce_chunk(targets, chunk_start, chunk_end)
             missing: set[tuple[str, date]] = set()
+
             for sector_id, day, mm in rows:
                 if mm is None:
                     missing.add((sector_id, day))
@@ -127,78 +154,106 @@ class CHIRPSGEEService:
                     result[sector_id][day] = float(mm)
 
             if missing:
-                # Sector smaller than a CHIRPS pixel: sample the pixel under its centroid instead.
-                ids = {sid for sid, _ in missing}
+                missing_ids = {sector_id for sector_id, _ in missing}
+
                 points = [
                     (
-                        a.sector_id,
+                        area.sector_id,
                         {
                             "type": "Point",
-                            "coordinates": [a.centroid_lon, a.centroid_lat],
+                            "coordinates": [
+                                area.centroid_lon,
+                                area.centroid_lat,
+                            ],
                         },
                     )
-                    for a in areas
-                    if a.sector_id in ids
+                    for area in areas
+                    if area.sector_id in missing_ids
                 ]
-                for sector_id, day, mm in self._reduce_chunk(
+
+                fallback_rows = self._reduce_chunk(
                     points, chunk_start, chunk_end
-                ):
+                )
+
+                for sector_id, day, mm in fallback_rows:
                     if mm is not None and (sector_id, day) in missing:
                         result[sector_id][day] = float(mm)
                         missing.discard((sector_id, day))
+
             self.unresolved.extend(sorted(missing))
 
         if self.unresolved:
-            logger.warning("%d sector-days had no CHIRPS value", len(self.unresolved))
+            logger.warning(
+                "%d sector-days had no CHIRPS value",
+                len(self.unresolved),
+            )
+
         return result
 
-    # the only place that talks to Earth Engine
     def _reduce_chunk(
         self, targets: Sequence[tuple[str, dict]], start: date, end: date
     ) -> list[tuple[str, date, float | None]]:
         ee_ = self._ee
+
         try:
             features = ee_.FeatureCollection(
                 [
                     ee_.Feature(
-                        ee_.Geometry(geometry, None, False), {"sector_id": sector_id}
+                        ee_.Geometry(geometry, None, False),
+                        {"sector_id": sector_id},
                     )
                     for sector_id, geometry in targets
                 ]
             )
+
             images = (
                 ee_.ImageCollection(self.collection)
-                .filterDate(start.isoformat(), (end + timedelta(days=1)).isoformat())
+                .filterDate(
+                    start.isoformat(),
+                    (end + timedelta(days=1)).isoformat(),
+                )
                 .select(PRECIPITATION_BAND)
             )
 
             def per_image(image):
                 day = image.date().format("YYYY-MM-dd")
+
                 reduced = image.reduceRegions(
-                    collection=features, reducer=ee_.Reducer.mean(), scale=self.scale
+                    collection=features,
+                    reducer=ee_.Reducer.mean(),
+                    scale=self.scale,
                 )
+
                 return reduced.map(
-                    lambda f: ee_.Feature(
+                    lambda feature: ee_.Feature(
                         None,
                         {
-                            "sector_id": f.get("sector_id"),
+                            "sector_id": feature.get("sector_id"),
                             "day": day,
-                            "mm": f.get("mean"),
+                            "mm": feature.get("mean"),
                         },
                     )
                 )
 
             table = ee_.FeatureCollection(images.map(per_image)).flatten()
             info = table.getInfo()
+
         except (ee_.EEException, OSError) as exc:
-            raise ChirpsFetchError(
+            raise RuntimeError(
                 f"CHIRPS request failed for {start}..{end}: {exc}"
             ) from exc
 
         rows = []
+
         for feature in info.get("features", []):
-            props = feature["properties"]
+            properties = feature["properties"]
+
             rows.append(
-                (props["sector_id"], date.fromisoformat(props["day"]), props.get("mm"))
+                (
+                    properties["sector_id"],
+                    date.fromisoformat(properties["day"]),
+                    properties.get("mm"),
+                )
             )
+
         return rows

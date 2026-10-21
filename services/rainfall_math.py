@@ -48,10 +48,7 @@ def compute_rolling_windows(
     windows=WINDOW_DAYS,
     ndigits: int = 2,  # the rainfall_matrices columns are Numeric(6, 2)
 ) -> tuple[list[dict], list[date]]:
-    # Trailing rainfall sums that END ON (and include) each observation date.
-
-    # A date is only produced when every day of the longest window has data; otherwise the date is skipped and reported, so a missing day never silently counts as 0 mm.
-
+    
     longest = max(windows)
     rows: list[dict] = []
     skipped: list[date] = []
