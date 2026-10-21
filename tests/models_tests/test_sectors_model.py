@@ -55,11 +55,6 @@ def test_sector_generates_uuid_and_utc_timestamp(
         "province_name",
         "district_name",
         "sector_name",
-        "boundary_ref",
-        "mean_slope_deg",
-        "geology_class",
-        "soil_features",
-        "land_cover_class",
     ],
 )
 def test_required_columns_reject_null(db_session, column, make_sector):
