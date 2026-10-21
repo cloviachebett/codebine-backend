@@ -40,7 +40,7 @@ class RainfallService:
         self._chirps = chirps
 
     def _get_chirps(self):
-        return self._chirps or CHIRPSGEEService(settings=self.settings)
+        return self._chirps or CHIRPSGEEService()
 
     def get_all_matrices(
         self,
