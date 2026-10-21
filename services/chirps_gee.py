@@ -85,9 +85,9 @@ class CHIRPSGEEService:
             raise RuntimeError(f"GEE key file not found: {key_path}")
 
         key_text = key_path.read_text()
-        email = self.settings.gee_service_account_email or json.loads(
-            key_text
-        ).get("client_email")
+        email = self.settings.gee_service_account_email or json.loads(key_text).get(
+            "client_email"
+        )
 
         if not email:
             raise RuntimeError(
@@ -107,18 +107,14 @@ class CHIRPSGEEService:
                 .getInfo()
             )
         except (self._ee.EEException, OSError) as exc:
-            raise RuntimeError(
-                f"Could not read the latest CHIRPS date: {exc}"
-            ) from exc
+            raise RuntimeError(f"Could not read the latest CHIRPS date: {exc}") from exc
 
         if millis is None:
             raise RuntimeError(
                 f"CHIRPS collection {self.collection} returned no images."
             )
 
-        return datetime.fromtimestamp(
-            millis / 1000, tz=timezone.utc
-        ).date()
+        return datetime.fromtimestamp(millis / 1000, tz=timezone.utc).date()
 
     def fetch_daily_rainfall(
         self, areas: Sequence[SectorArea], start: date, end: date
@@ -130,9 +126,7 @@ class CHIRPSGEEService:
         self.initialize()
         self.unresolved = []
 
-        result: dict[str, dict[date, float]] = {
-            area.sector_id: {} for area in areas
-        }
+        result: dict[str, dict[date, float]] = {area.sector_id: {} for area in areas}
 
         if not areas:
             return result
@@ -140,9 +134,7 @@ class CHIRPSGEEService:
         step = days_per_chunk(len(areas), self.max_features)
 
         for chunk_start, chunk_end in chunk_days(start, end, step):
-            targets = [
-                (area.sector_id, area.geometry) for area in areas
-            ]
+            targets = [(area.sector_id, area.geometry) for area in areas]
 
             rows = self._reduce_chunk(targets, chunk_start, chunk_end)
             missing: set[tuple[str, date]] = set()
@@ -171,9 +163,7 @@ class CHIRPSGEEService:
                     if area.sector_id in missing_ids
                 ]
 
-                fallback_rows = self._reduce_chunk(
-                    points, chunk_start, chunk_end
-                )
+                fallback_rows = self._reduce_chunk(points, chunk_start, chunk_end)
 
                 for sector_id, day, mm in fallback_rows:
                     if mm is not None and (sector_id, day) in missing:

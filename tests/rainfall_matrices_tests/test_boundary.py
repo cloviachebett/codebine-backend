@@ -70,7 +70,9 @@ def test_single_feature_collection_still_needs_a_name_match():
         "features": [feature("Whatever", "Elsewhere", geometry)],
     }
 
-    assert resolve_boundary_geometry(json.dumps(data), "Whatever", "Elsewhere") == geometry
+    assert (
+        resolve_boundary_geometry(json.dumps(data), "Whatever", "Elsewhere") == geometry
+    )
 
     with pytest.raises(ValueError, match="no feature"):
         resolve_boundary_geometry(json.dumps(data), "Other", "Other")

@@ -54,9 +54,7 @@ class RainfallService:
             db,
             sector_id=sector_id,
             start=_midnight_utc(start) if start else None,
-            end_exclusive=(
-                _midnight_utc(end + timedelta(days=1)) if end else None
-            ),
+            end_exclusive=(_midnight_utc(end + timedelta(days=1)) if end else None),
             limit=limit,
         )
 
@@ -67,11 +65,7 @@ class RainfallService:
         start: date | None = None,
         end: date | None = None,
     ):
-        sector = (
-            db.query(Sector)
-            .filter(Sector.sector_id == sector_id)
-            .first()
-        )
+        sector = db.query(Sector).filter(Sector.sector_id == sector_id).first()
 
         if sector is None:
             raise HTTPException(
@@ -83,9 +77,7 @@ class RainfallService:
             db,
             sector_id,
             start=_midnight_utc(start) if start else None,
-            end_exclusive=(
-                _midnight_utc(end + timedelta(days=1)) if end else None
-            ),
+            end_exclusive=(_midnight_utc(end + timedelta(days=1)) if end else None),
         )
 
     def get_status(
@@ -100,12 +92,8 @@ class RainfallService:
         info: dict[str, Any] = {
             "stored_rows": stats["stored_rows"],
             "sectors_with_data": stats["sectors_with_data"],
-            "latest_stored_date": (
-                utc_date(latest).isoformat() if latest else None
-            ),
-            "dataset_status": (
-                dataset.processing_status.value if dataset else None
-            ),
+            "latest_stored_date": (utc_date(latest).isoformat() if latest else None),
+            "dataset_status": (dataset.processing_status.value if dataset else None),
             "last_synced_at": (
                 dataset.last_processed_at.isoformat()
                 if dataset and dataset.last_processed_at
@@ -185,8 +173,7 @@ class RainfallService:
 
         if start > effective_end:
             raise ValueError(
-                f"start {start} is after the latest CHIRPS date available "
-                f"({latest})"
+                f"start {start} is after the latest CHIRPS date available ({latest})"
             )
 
         dataset = self._begin_run(db)
@@ -220,9 +207,7 @@ class RainfallService:
 
             records = [
                 {
-                    "observation_time": _midnight_utc(
-                        row["observation_date"]
-                    ),
+                    "observation_time": _midnight_utc(row["observation_date"]),
                     **{
                         window_column(days): row[window_column(days)]
                         for days in WINDOW_DAYS
@@ -256,9 +241,7 @@ class RainfallService:
             "rows_updated": updated,
             "days_skipped_incomplete": skipped_days,
             "sectors_with_missing_data": sectors_incomplete,
-            "sector_days_without_chirps_value": len(
-                getattr(chirps, "unresolved", [])
-            ),
+            "sector_days_without_chirps_value": len(getattr(chirps, "unresolved", [])),
         }
 
         self._finish_run(db, dataset, ok=True, details=summary)
@@ -273,20 +256,14 @@ class RainfallService:
         query = db.query(Sector)
 
         if sector_ids:
-            found = query.filter(
-                Sector.sector_id.in_(list(sector_ids))
-            ).all()
+            found = query.filter(Sector.sector_id.in_(list(sector_ids))).all()
 
-            missing = set(sector_ids) - {
-                sector.sector_id for sector in found
-            }
+            missing = set(sector_ids) - {sector.sector_id for sector in found}
 
             if missing:
                 raise LookupError(
                     "Sector(s) not found: "
-                    + ", ".join(
-                        sorted(str(sector_id) for sector_id in missing)
-                    )
+                    + ", ".join(sorted(str(sector_id) for sector_id in missing))
                 )
 
             return found
@@ -297,9 +274,7 @@ class RainfallService:
         ).all()
 
         if not found:
-            raise LookupError(
-                "There are no sectors to fetch rainfall for"
-            )
+            raise LookupError("There are no sectors to fetch rainfall for")
 
         return found
 
@@ -374,11 +349,7 @@ class RainfallService:
 
         db.add(
             SystemAuditLog(
-                action_type=(
-                    "RAINFALL_SYNC_SUCCESS"
-                    if ok
-                    else "RAINFALL_SYNC_FAILED"
-                ),
+                action_type=("RAINFALL_SYNC_SUCCESS" if ok else "RAINFALL_SYNC_FAILED"),
                 entity_type="dataset_metadata",
                 entity_id=str(dataset.dataset_id),
                 execution_details=details,

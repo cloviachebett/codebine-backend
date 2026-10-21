@@ -48,7 +48,7 @@ def compute_rolling_windows(
     windows=WINDOW_DAYS,
     ndigits: int = 2,  # the rainfall_matrices columns are Numeric(6, 2)
 ) -> tuple[list[dict], list[date]]:
-    
+
     longest = max(windows)
     rows: list[dict] = []
     skipped: list[date] = []

@@ -59,8 +59,7 @@ def _pick_geometry(
 
     if not matches:
         raise ValueError(
-            f"no feature with {sector_property}={sector_name!r} "
-            "in the boundary data"
+            f"no feature with {sector_property}={sector_name!r} in the boundary data"
         )
 
     raise ValueError(
