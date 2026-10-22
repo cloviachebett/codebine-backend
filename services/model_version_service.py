@@ -142,10 +142,27 @@ class ModelVersionService:
         feature_names = list(model.feature_names_in_)
         row = []
         for name in feature_names:
-            if name == "percentage":
-                row.append(0.0)
-            elif name == "landcover":
-                row.append(sector.land_cover_class)
+            if name == "land_cover_class":
+                row.append(sector.land_cover_class or "Cropland")
+            elif name == "mean_slope_deg":
+                row.append(
+                    float(sector.mean_slope_deg) if sector.mean_slope_deg else 22.0
+                )
+            elif name == "month":
+                obs_time = latest_obs.get("observation_time")
+                if not obs_time:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Missing feature value for month",
+                    )
+                try:
+                    dt = datetime.fromisoformat(obs_time.replace("Z", "+00:00"))
+                except ValueError:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid observation_time format: {obs_time}",
+                    )
+                row.append(dt.month)
             else:
                 value = latest_obs.get(name)
                 if value is None:
