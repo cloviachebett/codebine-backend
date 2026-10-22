@@ -111,7 +111,7 @@ def list_all_system_logs(
 
 class AutomatedAuditMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        
+
         if request.method in ("GET", "HEAD", "OPTIONS"):
             return await call_next(request)
 
