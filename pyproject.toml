@@ -18,6 +18,7 @@ dependencies = [
     "scikit-learn==1.6.1",
     "joblib>=1.6",
     "pandas>=2.0",
+    "earthengine-api>=1.7.48",
 ]
 
 [dependency-groups]
