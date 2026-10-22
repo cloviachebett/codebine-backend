@@ -5,6 +5,7 @@ from routers.incidents import router as incidents_router
 from routers.prediction_features_router import router as prediction_features_router
 from routers.reviews import router as reviews_router
 from routers.risk_inferences_router import router as risk_inferences_router
+from routers.rainfall_matrices import router as rainfall_router
 from routers.sectors import router as sectors_router
 from routers.system_logs import router as system_logs_router
 from services.system_logs import AutomatedAuditMiddleware
@@ -20,6 +21,7 @@ app.include_router(sectors_router)
 app.include_router(risk_inferences_router)
 app.include_router(prediction_features_router)
 app.include_router(system_logs_router)
+app.include_router(rainfall_router)
 
 
 @app.get("/health")
