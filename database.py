@@ -10,6 +10,8 @@ DATABASE_URL = os.getenv(
     if "pytest" in os.environ.get("PYTEST_CURRENT_TEST", "") or "pytest" in sys.argv
     else "postgresql://postgres:postgres@localhost:5432/TerraWatch_db",
 )
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
