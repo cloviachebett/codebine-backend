@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 
 from pydantic import BaseModel, ConfigDict
 
@@ -42,3 +42,9 @@ class RainfallStatus(BaseModel):
     dataset_status: str | None = None
     last_synced_at: str | None = None
     chirps_latest_available: str | None = None
+
+
+class RainfallSyncRequest(BaseModel):
+    sector_id: uuid.UUID | None = None
+    start_date: date | None = None
+    end_date: date | None = None

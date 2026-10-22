@@ -77,7 +77,17 @@ def test_sector_with_no_rows_is_an_empty_list_unknown_sector_is_404(client, add_
 
 def test_invalid_sector_id_is_422_not_500(client):
     assert client.get("/api/v1/rainfall/sectors/not-a-uuid").status_code == 422
-    assert client.post("/api/v1/rainfall/sync?sector_id=not-a-uuid").status_code == 422
+    assert (
+        client.post(
+            "/api/v1/rainfall/sync", json={"sector_id": "not-a-uuid"}
+        ).status_code
+        == 422
+    )
+
+
+def test_sync_body_is_required(client):
+    # The sync request is a JSON body now, so a call without one is invalid.
+    assert client.post("/api/v1/rainfall/sync").status_code == 422
 
 
 @pytest.mark.parametrize(
@@ -94,14 +104,15 @@ def test_sync_maps_service_errors_to_http_codes(client, monkeypatch, error, expe
         raise error
 
     monkeypatch.setattr(RainfallService, "run_sync", boom)
-    response = client.post("/api/v1/rainfall/sync")
+    response = client.post("/api/v1/rainfall/sync", json={})
     assert response.status_code == expected
     assert str(error) in response.json()["detail"]
 
 
 def test_sync_rejects_start_after_end(client):
     response = client.post(
-        "/api/v1/rainfall/sync?start_date=2024-03-10&end_date=2024-03-01"
+        "/api/v1/rainfall/sync",
+        json={"start_date": "2024-03-10", "end_date": "2024-03-01"},
     )
     assert response.status_code == 400
 
@@ -115,7 +126,12 @@ def test_sync_end_to_end_with_fake_chirps(
     )
 
     response = client.post(
-        f"/api/v1/rainfall/sync?sector_id={sector.sector_id}&start_date=2024-03-10&end_date=2024-03-12"
+        "/api/v1/rainfall/sync",
+        json={
+            "sector_id": str(sector.sector_id),
+            "start_date": "2024-03-10",
+            "end_date": "2024-03-12",
+        },
     )
     assert response.status_code == 200
     summary = response.json()
@@ -132,6 +148,24 @@ def test_sync_end_to_end_with_fake_chirps(
     ]
     assert rows[0]["rain_1day_mm"] == 50.0 and rows[0]["rain_30day_mm"] == 50.0
     assert rows[0]["dataset_id"] is not None
+
+
+def test_sync_body_limits_the_run_to_the_given_sector(
+    client, add_sector, monkeypatch, fake_chirps, rainfall_settings
+):
+    a, b = add_sector(), add_sector()
+    monkeypatch.setattr(
+        rainfall_module, "CHIRPSGEEService", lambda **kwargs: fake_chirps()
+    )
+
+    response = client.post(
+        "/api/v1/rainfall/sync", json={"sector_id": str(a.sector_id)}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["sectors_synced"] == 1
+    assert client.get(f"/api/v1/rainfall/sectors/{a.sector_id}").json() != []
+    assert client.get(f"/api/v1/rainfall/sectors/{b.sector_id}").json() == []
 
 
 def test_status_endpoint(client):

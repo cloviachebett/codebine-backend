@@ -8,6 +8,7 @@ from database import get_db
 from schemas.rainfall_matrices import (
     RainfallMatrixRead,
     RainfallStatus,
+    RainfallSyncRequest,
     RainfallSyncResult,
 )
 from services.rainfall_matrices import rainfall_service
@@ -38,22 +39,14 @@ def get_sector_matrix(
 
 @router.post("/sync", response_model=RainfallSyncResult)
 def sync_rainfall(
-    sector_id: uuid.UUID | None = Query(
-        None, description="Only this sector; omit for all sectors"
-    ),
-    start_date: date | None = Query(
-        None, description="Defaults to the configured look-back window"
-    ),
-    end_date: date | None = Query(
-        None, description="Defaults to the latest CHIRPS day available"
-    ),
+    payload: RainfallSyncRequest,
     db: Session = Depends(get_db),
 ):
     return rainfall_service.sync_rainfall(
         db,
-        sector_ids=[sector_id] if sector_id else None,
-        start=start_date,
-        end=end_date,
+        sector_ids=[payload.sector_id] if payload.sector_id else None,
+        start=payload.start_date,
+        end=payload.end_date,
     )
 
 
