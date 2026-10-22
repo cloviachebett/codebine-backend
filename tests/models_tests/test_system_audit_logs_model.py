@@ -285,8 +285,7 @@ def test_12_router_endpoint_manual_log_creation(
 
     response = client.post("/audit-logs/", json=payload)
 
-    assert response.status_code in (status.HTTP_201_CREATED, status.HTTP_200_OK)
-    assert response.json()["action_type"] == "ADMIN_FLUSH_CACHE"
+    assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
 
 def test_14_background_worker_swallows_database_errors(monkeypatch):

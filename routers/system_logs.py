@@ -1,25 +1,15 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.users import User
-from schemas.system_logs import AuditLogCreate, AuditLogResponse
+from schemas.system_logs import AuditLogResponse
 from services import system_logs as system_log_service
 from services.current_user import get_current_user
 
 router = APIRouter(prefix="/audit-logs", tags=["System Audit Logs"])
-
-
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=AuditLogResponse)
-def log_manual_audit_record(
-    payload: AuditLogCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Persists an admin-created audit record attributed to the acting admin."""
-    return system_log_service.log_manual_audit_record(db, payload, current_user)
 
 
 @router.get("/", response_model=list[AuditLogResponse])

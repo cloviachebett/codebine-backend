@@ -55,17 +55,6 @@ def log_action(db: Session, schema: AuditLogCreate) -> AuditLogResponse:
     return AuditLogResponse.model_validate(db_log)
 
 
-def log_manual_audit_record(
-    db: Session, schema: AuditLogCreate, user: User
-) -> AuditLogResponse:
-    """Persist an admin created audit record attributed to the acting admin."""
-    ensure_admin(user)
-    schema.user_id = user.user_id
-    response = log_action(db, schema)
-    db.commit()
-    return response
-
-
 def log_system_event(
     db: Session,
     action_type: str,
@@ -122,7 +111,7 @@ def list_all_system_logs(
 
 class AutomatedAuditMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-
+        
         if request.method in ("GET", "HEAD", "OPTIONS"):
             return await call_next(request)
 
