@@ -5,9 +5,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from auth_dependency import (
-    get_current_user as _jwt_get_current_user,
-)
+from auth_dependency import get_current_user as _jwt_get_current_user
 from database import get_db
 from models._enums import AccountStatus
 from models.users import User
@@ -35,5 +33,4 @@ async def get_current_user(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
             )
-    # delegate to JWT auth
     return await _jwt_get_current_user(credentials, db)
