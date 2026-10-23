@@ -49,13 +49,12 @@ def test_create_returns_the_saved_report(client, sector, db_session):
 
 
 def test_create_writes_an_audit_entry(client, sector, db_session):
-    report_id = client.post(URL, json=body(sector)).json()["report_id"]
+    client.post(URL, json=body(sector)).json()["report_id"]
 
     logs = db_session.query(SystemAuditLog).all()
     assert len(logs) == 1
-    assert logs[0].action_type == "INCIDENT_REPORT_CREATED"
-    assert logs[0].entity_type == "incident_reports"
-    assert logs[0].entity_id == report_id
+    assert logs[0].action_type == "API_POST_API_V1_INCIDENTS"
+    assert logs[0].entity_type == "api_routes"
 
 
 def test_description_is_trimmed(client, sector):

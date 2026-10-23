@@ -26,6 +26,8 @@ def _session_for(request: Request):
         if hasattr(res, "__enter__"):
             with res as session:
                 yield session
+        elif hasattr(res, "__next__"):
+            yield next(res)
         else:
             yield res
         return
