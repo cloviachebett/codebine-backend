@@ -30,14 +30,46 @@ LOGIN_BLOCK_SECONDS = 900
 API_QUOTA_PER_HOUR = 1000
 
 
+_ephemeral_private = None
+_ephemeral_public = None
+
+
+def _generate_ephemeral_keys():
+    global _ephemeral_private, _ephemeral_public
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives import serialization
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    _ephemeral_private = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    _ephemeral_public = (
+        key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
+
+
 def _load_pem(path_env: str, default: str) -> str:
+    global _ephemeral_private, _ephemeral_public
     path = os.getenv(path_env, default)
-    if not os.path.exists(path):
-        path = default
-    if not os.path.exists(path):
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), default)
-    with open(path, "r") as f:
-        return f.read()
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return f.read()
+    alt = os.path.join(os.path.dirname(os.path.abspath(__file__)), default)
+    if os.path.exists(alt):
+        with open(alt, "r") as f:
+            return f.read()
+    if _ephemeral_private is None:
+        _generate_ephemeral_keys()
+    if "private" in default:
+        return _ephemeral_private
+    return _ephemeral_public
 
 
 def load_private_key() -> str:
