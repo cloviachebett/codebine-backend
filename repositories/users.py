@@ -8,6 +8,12 @@ class UserRepository:
         self.model = User
 
     def get(self, db: Session, user_id):
+        from uuid import UUID as _UUID
+
+        try:
+            user_id = _UUID(str(user_id))
+        except (ValueError, AttributeError):
+            pass
         return db.get(self.model, user_id)
 
     def get_by_email(self, db: Session, email: str):
@@ -23,6 +29,12 @@ class UserRepository:
         return user
 
     def delete(self, db: Session, user_id) -> bool:
+        from uuid import UUID as _UUID
+
+        try:
+            user_id = _UUID(str(user_id))
+        except (ValueError, AttributeError):
+            pass
         user = db.get(self.model, user_id)
         if user is None:
             return False
