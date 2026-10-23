@@ -29,6 +29,12 @@ class User(Base):
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     phone = Column(String(30), nullable=True)
     mfa_enrolled = Column(Boolean, nullable=False, default=False)
+    mfa_secret = Column(String(64), nullable=True)
+    is_verified = Column(Boolean, nullable=False, default=False)
+    verification_token_hash = Column(String(255), nullable=True)
+    verification_token_expires = Column(DateTime(timezone=True), nullable=True)
+    reset_token_hash = Column(String(255), nullable=True)
+    reset_token_expires = Column(DateTime(timezone=True), nullable=True)
     failed_login_attempts = Column(Integer, nullable=False, default=0)
     locked_until = Column(DateTime(timezone=True), nullable=True)
 
