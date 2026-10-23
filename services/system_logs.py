@@ -117,6 +117,12 @@ class AutomatedAuditMiddleware(BaseHTTPMiddleware):
         if request.method in ("GET", "HEAD", "OPTIONS"):
             return await call_next(request)
 
+        # Skip auto-logging for routes that record their own business audit entries
+        if request.url.path.startswith(
+            ("/api/v1/alerts", "/api/v1/incidents", "/api/v1/reviews")
+        ):
+            return await call_next(request)
+
         start_time = time.time()
         response = await call_next(request)
         process_time = time.time() - start_time

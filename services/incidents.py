@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from models.incident_reports import IncidentReport
+from models.system_audit_logs import SystemAuditLog
 from repositories.incidents import incident_repository
 from schemas.incidents import IncidentCreate, IncidentRead
 
@@ -37,6 +38,15 @@ def create_incident(
             reported_by=reporter_id,
             event_date=data.event_date,
             description=data.description,
+        ),
+    )
+    incident_repository.add_audit_log(
+        db,
+        SystemAuditLog(
+            user_id=reporter_id,
+            action_type="INCIDENT_REPORT_CREATED",
+            entity_type="incident_reports",
+            entity_id=str(report.report_id),
         ),
     )
     db.commit()
