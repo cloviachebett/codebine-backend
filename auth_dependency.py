@@ -227,7 +227,13 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject"
         )
-    user = db.get(User, user_id)
+    from uuid import UUID as _UUID
+
+    try:
+        _uid = _UUID(str(user_id))
+    except (ValueError, AttributeError):
+        _uid = user_id
+    user = db.get(User, _uid)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
