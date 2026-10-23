@@ -3,7 +3,6 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
 from database import get_db
 from models._enums import AccountStatus
 from models.users import User
