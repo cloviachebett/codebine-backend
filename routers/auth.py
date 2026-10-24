@@ -15,6 +15,7 @@ from auth_dependency import (
     record_login_failure,
     clear_login_failures,
     CREDENTIALS_ERROR,
+    generate_email_otp,
 )
 from database import get_db
 from models.users import User
@@ -44,15 +45,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         record_login_failure(identifier)
         raise CREDENTIALS_ERROR
     clear_login_failures(identifier)
-    if getattr(user, "mfa_enrolled", False):
-        from auth_dependency import generate_email_otp
-
-        generate_email_otp(user.email)
-        return {"otp_required": True, "message": "OTP sent to email"}
-    role_val = user.role.value if hasattr(user.role, "value") else user.role
-    access = create_access_token(str(user.user_id), user.role)
-    refresh = create_refresh_token(str(user.user_id))
-    return TokenResponse(access_token=access, refresh_token=refresh, role=role_val)
+    generate_email_otp(user.email)
+    return {"otp_required": True, "message": "OTP sent to email"}
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -76,8 +70,6 @@ def logout(payload: dict, current_user: User = Depends(get_current_user)):
 def verify_otp(payload: VerifyOtpRequest, db: Session = Depends(get_db)):
     from auth_dependency import (
         verify_email_otp,
-        create_access_token,
-        create_refresh_token,
     )
     from repositories.users import user_repository
 
@@ -192,21 +184,3 @@ def verify_email(token: str = Query(...), db: Session = Depends(get_db)):
     user.verification_token_expires = None
     db.commit()
     return {"message": "Email verified"}
-
-
-@router.post("/mfa/enable")
-def enable_mfa(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
-    current_user.mfa_enrolled = True
-    db.commit()
-    return {"message": "Email OTP enabled for this account"}
-
-
-@router.post("/mfa/disable")
-def disable_mfa(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
-):
-    current_user.mfa_enrolled = False
-    db.commit()
-    return {"message": "MFA disabled"}

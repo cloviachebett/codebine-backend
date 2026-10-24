@@ -33,6 +33,7 @@ def create_user(db: Session, payload: UserCreate, creator):
         password_hash=hash_password(payload.password),
         role=role,
         phone=payload.phone,
+        mfa_enrolled=True,
         account_status=AccountStatus.ACTIVE,
     )
     return user_repo.create(db, user)

@@ -93,7 +93,6 @@ def verify_password(plain: str, hashed: Optional[str]) -> bool:
         return False
 
 
-# In-memory rate limiting / lockout state
 _login_failures: dict[str, list[float]] = {}
 _login_blocks: dict[str, float] = {}
 _api_quota: dict[str, tuple[int, float]] = {}
@@ -170,7 +169,6 @@ def create_refresh_token(user_id: str) -> str:
         "jti": jti,
     }
     token = jwt.encode(to_encode, load_private_key(), algorithm=ALGORITHM)
-    # store jti validity in memory (simple)
     _refresh_tokens.add(jti)
     return token
 
@@ -214,7 +212,6 @@ def rotate_refresh_token(old_refresh_token: str) -> dict:
     if ttl > 0:
         blacklist_token(jti, ttl)
     user_id = payload.get("sub")
-    # role unknown here; default analyst
     new_access = create_access_token(user_id, UserRole.ANALYST)
     new_refresh = create_refresh_token(user_id)
     return {
@@ -278,7 +275,6 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account locked"
         )
-    # api quota
     if not check_api_quota(str(user.user_id)):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="API quota exceeded"
@@ -320,8 +316,6 @@ def require_self_or_admin(user_id: str, current_user: User):
         )
     return current_user
 
-
-# Email OTP (in-memory, for testing; replace with email service in prod)
 
 _otp_store: dict[str, tuple[str, float]] = {}
 

@@ -80,14 +80,24 @@ def _make_user(
     return u
 
 
-def test_login_returns_tokens(client, db_session):
-    _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
+def _login(client, email, password):
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        r = client.post("/auth/login", json={"email": email, "password": password})
     assert r.status_code == 200
-    body = r.json()
-    assert "access_token" in body and "refresh_token" in body
+    m = re.search(r"\[OTP for .*?\]: (\d+)", buf.getvalue())
+    assert m, buf.getvalue()
+    code = m.group(1)
+    r2 = client.post("/auth/verify-otp", json={"email": email, "code": code})
+    assert r2.status_code == 200, r2.text
+    return r2.json()["access_token"]
+
+
+def test_login_returns_tokens(client, db_session, monkeypatch):
+    _make_user(db_session)
+    monkeypatch.setenv("EMAIL_HOST", "")
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
+    assert token
 
 
 def test_login_bad_credentials(client, db_session):
@@ -96,19 +106,16 @@ def test_login_bad_credentials(client, db_session):
     assert r.status_code == 401
 
 
-def test_register_analyst_requires_admin(client, db_session):
-    # non-admin (analyst) cannot register
+def test_register_analyst_requires_admin(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
     _make_user(
         db_session,
         email="analyst@test.rw",
         role=UserRole.ANALYST,
         password="AnalystPass12345!",
     )
-    r = client.post(
-        "/auth/login",
-        json={"email": "analyst@test.rw", "password": "AnalystPass12345!"},
-    )
-    token = r.json()["access_token"]
+    # analyst login works but cannot register
+    token = _login(client, "analyst@test.rw", "AnalystPass12345!")
     r2 = client.post(
         "/users",
         json={"full_name": "New", "email": "new@test.rw", "password": "NewPass12345!"},
@@ -117,12 +124,10 @@ def test_register_analyst_requires_admin(client, db_session):
     assert r2.status_code == 403
 
 
-def test_admin_registers_analyst(client, db_session):
+def test_admin_registers_analyst(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
     _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    token = r.json()["access_token"]
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
     r2 = client.post(
         "/users",
         json={
@@ -137,36 +142,16 @@ def test_admin_registers_analyst(client, db_session):
 
 
 def test_otp_flow(client, db_session, monkeypatch):
-    _make_user(db_session)
     monkeypatch.setenv("EMAIL_HOST", "")
-    # enable MFA
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    token = r.json()["access_token"]
-    client.post("/auth/mfa/enable", headers={"Authorization": f"Bearer {token}"})
-    # login now requires OTP
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        r2 = client.post(
-            "/auth/login",
-            json={"email": "admin@test.rw", "password": "AdminPass12345!"},
-        )
-    assert r2.json().get("otp_required") is True
-    m = re.search(r"\[OTP for .*?\]: (\d+)", buf.getvalue())
-    assert m
-    code = m.group(1)
-    r3 = client.post("/auth/verify-otp", json={"email": "admin@test.rw", "code": code})
-    assert r3.status_code == 200
-    assert "access_token" in r3.json()
-
-
-def test_me_endpoint(client, db_session):
     _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    token = r.json()["access_token"]
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
+    assert token
+
+
+def test_me_endpoint(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
+    _make_user(db_session)
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
     r2 = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert r2.status_code == 200
     assert r2.json()["email"] == "admin@test.rw"
@@ -176,75 +161,60 @@ def test_forgot_and_reset_password(client, db_session):
     _make_user(db_session)
     r = client.post("/auth/forgot-password", json={"email": "admin@test.rw"})
     assert r.status_code == 200
-    # token printed to console; instead reset via DB hash is not available,
-    # so just confirm endpoint accepts request
     assert "message" in r.json()
 
 
-def test_mfa_enable_disable(client, db_session):
+def test_refresh_token(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
     _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    token = r.json()["access_token"]
-    r2 = client.post("/auth/mfa/enable", headers={"Authorization": f"Bearer {token}"})
-    assert r2.status_code == 200
-    r3 = client.post("/auth/mfa/disable", headers={"Authorization": f"Bearer {token}"})
+    # need a refresh token: login returns otp_required, verify-otp returns refresh
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        client.post(
+            "/auth/login",
+            json={"email": "admin@test.rw", "password": "AdminPass12345!"},
+        )
+    m = re.search(r"\[OTP for .*?\]: (\d+)", buf.getvalue())
+    code = m.group(1)
+    r2 = client.post("/auth/verify-otp", json={"email": "admin@test.rw", "code": code})
+    refresh = r2.json()["refresh_token"]
+    r3 = client.post("/auth/refresh", json={"refresh_token": refresh})
     assert r3.status_code == 200
+    assert "access_token" in r3.json()
 
 
-def test_refresh_token(client, db_session):
+def test_logout(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
     _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    refresh = r.json()["refresh_token"]
-    r2 = client.post("/auth/refresh", json={"refresh_token": refresh})
-    assert r2.status_code == 200
-    assert "access_token" in r2.json()
-
-
-def test_logout(client, db_session):
-    _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    body = r.json()
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
     r2 = client.post(
         "/auth/logout",
         json={"access_jti": "x", "refresh_jti": "y"},
-        headers={"Authorization": f"Bearer {body['access_token']}"},
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert r2.status_code == 200
 
 
-def test_get_user_self(client, db_session):
+def test_get_user_self(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
     u = _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    token = r.json()["access_token"]
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
     r2 = client.get(f"/users/{u.user_id}", headers={"Authorization": f"Bearer {token}"})
     assert r2.status_code == 200
 
 
-def test_list_users_admin(client, db_session):
+def test_list_users_admin(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
     _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    token = r.json()["access_token"]
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
     r2 = client.get("/users/", headers={"Authorization": f"Bearer {token}"})
     assert r2.status_code == 200
 
 
-def test_delete_user(client, db_session):
+def test_delete_user(client, db_session, monkeypatch):
+    monkeypatch.setenv("EMAIL_HOST", "")
     _make_user(db_session)
-    r = client.post(
-        "/auth/login", json={"email": "admin@test.rw", "password": "AdminPass12345!"}
-    )
-    token = r.json()["access_token"]
-    # create an analyst then delete
+    token = _login(client, "admin@test.rw", "AdminPass12345!")
     r2 = client.post(
         "/users",
         json={"full_name": "Del", "email": "del@test.rw", "password": "DelPass12345!"},

@@ -28,7 +28,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=utcnow)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     phone = Column(String(30), nullable=True)
-    mfa_enrolled = Column(Boolean, nullable=False, default=False)
+    mfa_enrolled = Column(Boolean, nullable=False, default=True)
     mfa_secret = Column(String(64), nullable=True)
     is_verified = Column(Boolean, nullable=False, default=False)
     verification_token_hash = Column(String(255), nullable=True)
