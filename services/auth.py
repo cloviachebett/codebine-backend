@@ -1,7 +1,3 @@
-import hashlib
-import secrets
-from datetime import datetime, timedelta, timezone
-
 from fastapi import HTTPException, status
 
 from auth_dependency import (
@@ -10,18 +6,17 @@ from auth_dependency import (
     create_access_token,
     create_refresh_token,
     generate_email_otp,
-    hash_password,
     is_login_blocked,
     record_login_failure,
     verify_email_otp,
 )
-from models.users import User
-from repositories.users import user_repository
-from services.users import authenticate_user
-
-
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
+from services.users import (
+    authenticate_user,
+    request_password_reset,
+    reset_user_password,
+    validate_reset_token,
+    verify_user_email,
+)
 
 
 def login(db, email: str, password: str) -> dict:
@@ -41,6 +36,8 @@ def login(db, email: str, password: str) -> dict:
 
 
 def verify_otp(db, email: str, code: str) -> dict:
+    from repositories.users import user_repository
+
     user = user_repository.get_by_email(db, email)
     if user is None or not verify_email_otp(email, code):
         raise HTTPException(
@@ -58,60 +55,8 @@ def verify_otp(db, email: str, code: str) -> dict:
 
 
 def forgot_password(db, email: str) -> dict:
-    user = user_repository.get_by_email(db, email)
-    if user is not None:
-        token = secrets.token_urlsafe(32)
-        user.reset_token_hash = _hash_token(token)
-        user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
-        db.commit()
-        print(f"[RESET TOKEN for {email}]: {token}")
+    request_password_reset(db, email)
     return {"message": "If that email exists, a reset link has been sent."}
-
-
-def validate_reset_token(db, token: str) -> bool:
-    user = (
-        db.query(User)
-        .filter(
-            User.reset_token_hash == _hash_token(token),
-            User.reset_token_expires > datetime.now(timezone.utc),
-        )
-        .first()
-    )
-    return user is not None
-
-
-def reset_password(db, token: str, new_password: str) -> None:
-    user = (
-        db.query(User)
-        .filter(
-            User.reset_token_hash == _hash_token(token),
-            User.reset_token_expires > datetime.now(timezone.utc),
-        )
-        .first()
-    )
-    if user is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
-    user.password_hash = hash_password(new_password)
-    user.reset_token_hash = None
-    user.reset_token_expires = None
-    db.commit()
-
-
-def verify_email(db, token: str) -> None:
-    user = (
-        db.query(User)
-        .filter(
-            User.verification_token_hash == _hash_token(token),
-            User.verification_token_expires > datetime.now(timezone.utc),
-        )
-        .first()
-    )
-    if user is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
-    user.is_verified = True
-    user.verification_token_hash = None
-    user.verification_token_expires = None
-    db.commit()
 
 
 def reset_password_page(db, token: str) -> dict:
@@ -120,7 +65,17 @@ def reset_password_page(db, token: str) -> dict:
     return {"valid": True}
 
 
-def logout(db, access_jti=None, refresh_jti=None) -> dict:
+def reset_password(db, token: str, new_password: str) -> None:
+    if not reset_user_password(db, token, new_password):
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+
+def verify_email(db, token: str) -> None:
+    if not verify_user_email(db, token):
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+
+def logout(access_jti=None, refresh_jti=None) -> dict:
     from auth_dependency import blacklist_token
 
     if access_jti:

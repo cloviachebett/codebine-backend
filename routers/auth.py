@@ -32,9 +32,7 @@ def refresh(payload: RefreshPayload):
 
 @router.post("/logout")
 def logout(payload: dict, current_user: User = Depends(get_current_user)):
-    return auth_service.logout(
-        None, payload.get("access_jti"), payload.get("refresh_jti")
-    )
+    return auth_service.logout(payload.get("access_jti"), payload.get("refresh_jti"))
 
 
 @router.post("/verify-otp")
