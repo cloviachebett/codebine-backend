@@ -1,12 +1,8 @@
-import hashlib
-import secrets
-from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from auth_dependency import (
     get_current_user,
-    hash_password,
     create_access_token,
     create_refresh_token,
     rotate_refresh_token,
@@ -113,36 +109,16 @@ def me(current_user: User = Depends(get_current_user)):
     }
 
 
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
 @router.post("/forgot-password")
 def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    from repositories.users import user_repository
 
-    user = user_repository.get_by_email(db, payload.email)
-    if user is not None:
-        token = secrets.token_urlsafe(32)
-        user.reset_token_hash = _hash_token(token)
-        user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
-        db.commit()
-
-        print(f"[RESET TOKEN for {payload.email}]: {token}")
+    user_service.request_password_reset(db, payload.email)
     return {"message": "If that email exists, a reset link has been sent."}
 
 
 @router.get("/reset-password")
 def reset_password_page(token: str = Query(...), db: Session = Depends(get_db)):
-    user = (
-        db.query(User)
-        .filter(
-            User.reset_token_hash == _hash_token(token),
-            User.reset_token_expires > datetime.now(timezone.utc),
-        )
-        .first()
-    )
-    if user is None:
+    if not user_service.validate_reset_token(db, token):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     return {"valid": True}
 
@@ -150,37 +126,13 @@ def reset_password_page(token: str = Query(...), db: Session = Depends(get_db)):
 @router.post("/reset-password")
 def reset_password(payload: ResetPasswordPayload, db: Session = Depends(get_db)):
 
-    user = (
-        db.query(User)
-        .filter(
-            User.reset_token_hash == _hash_token(payload.token),
-            User.reset_token_expires > datetime.now(timezone.utc),
-        )
-        .first()
-    )
-    if user is None:
+    if not user_service.reset_user_password(db, payload.token, payload.new_password):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    user.password_hash = hash_password(payload.new_password)
-    user.reset_token_hash = None
-    user.reset_token_expires = None
-    db.commit()
     return {"message": "Password updated successfully"}
 
 
 @router.get("/verify-email")
 def verify_email(token: str = Query(...), db: Session = Depends(get_db)):
-    user = (
-        db.query(User)
-        .filter(
-            User.verification_token_hash == _hash_token(token),
-            User.verification_token_expires > datetime.now(timezone.utc),
-        )
-        .first()
-    )
-    if user is None:
+    if not user_service.verify_user_email(db, token):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
-    user.is_verified = True
-    user.verification_token_hash = None
-    user.verification_token_expires = None
-    db.commit()
     return {"message": "Email verified"}

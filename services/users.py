@@ -1,4 +1,6 @@
-from datetime import datetime, timezone
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -72,3 +74,65 @@ def enable_mfa(db: Session, user: User, code: str) -> bool:
     if not user.mfa_secret if hasattr(user, "mfa_secret") else True:
         return False
     return verify_totp(getattr(user, "mfa_secret", ""), code)
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def request_password_reset(db, email: str) -> None:
+    user = user_repo.get_by_email(db, email)
+    if user is not None:
+        token = secrets.token_urlsafe(32)
+        user.reset_token_hash = _hash_token(token)
+        user.reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        db.commit()
+        print(f"[RESET TOKEN for {email}]: {token}")
+
+
+def reset_user_password(db, token: str, new_password: str) -> bool:
+    user = (
+        db.query(User)
+        .filter(
+            User.reset_token_hash == _hash_token(token),
+            User.reset_token_expires > datetime.now(timezone.utc),
+        )
+        .first()
+    )
+    if user is None:
+        return False
+    user.password_hash = hash_password(new_password)
+    user.reset_token_hash = None
+    user.reset_token_expires = None
+    db.commit()
+    return True
+
+
+def verify_user_email(db, token: str) -> bool:
+    user = (
+        db.query(User)
+        .filter(
+            User.verification_token_hash == _hash_token(token),
+            User.verification_token_expires > datetime.now(timezone.utc),
+        )
+        .first()
+    )
+    if user is None:
+        return False
+    user.is_verified = True
+    user.verification_token_hash = None
+    user.verification_token_expires = None
+    db.commit()
+    return True
+
+
+def validate_reset_token(db, token: str) -> bool:
+    user = (
+        db.query(User)
+        .filter(
+            User.reset_token_hash == _hash_token(token),
+            User.reset_token_expires > datetime.now(timezone.utc),
+        )
+        .first()
+    )
+    return user is not None
