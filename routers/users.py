@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from auth_dependency import get_current_user, require_admin, require_self_or_admin
+from auth_dependency import get_current_user, require_admin
 from database import get_db
 from models.users import User
 from schemas.users import UserCreate, UserRead, UserUpdate
@@ -28,11 +28,7 @@ def get_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_self_or_admin(user_id, current_user)
-    user = user_service.get_user(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return user_service.get_user(db, user_id, current_user)
 
 
 @router.post("/", response_model=UserRead, status_code=201)
@@ -41,10 +37,6 @@ def create_user(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin),
 ):
-    from repositories.users import user_repository as user_repo
-
-    if user_repo.get_by_email(db, payload.email):
-        raise HTTPException(status_code=400, detail="Email already registered")
     return user_service.create_user(db, payload, current_admin)
 
 
@@ -55,11 +47,7 @@ def update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_self_or_admin(user_id, current_user)
-    user = user_service.update_user(db, user_id, payload, current_user)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return user_service.update_user(db, user_id, payload, current_user)
 
 
 @router.delete("/{user_id}")
@@ -68,7 +56,5 @@ def delete_user(
     db: Session = Depends(get_db),
     current_admin: User = Depends(require_admin),
 ):
-    deleted = user_service.delete_user(db, user_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="User not found")
+    user_service.delete_user(db, user_id)
     return {"message": "User deleted"}

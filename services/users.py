@@ -1,10 +1,11 @@
+from fastapi import HTTPException
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from auth_dependency import hash_password, verify_password
+from auth_dependency import hash_password, require_self_or_admin, verify_password
 from models._enums import UserRole, AccountStatus
 from models.users import User
 from repositories.users import user_repository as user_repo
@@ -28,6 +29,8 @@ def authenticate_user(db: Session, email: str, password: str):
 
 
 def create_user(db: Session, payload: UserCreate, creator):
+    if user_repo.get_by_email(db, payload.email):
+        raise HTTPException(status_code=400, detail="Email already registered")
     role = UserRole.ANALYST
     user = User(
         full_name=payload.full_name,
@@ -41,8 +44,13 @@ def create_user(db: Session, payload: UserCreate, creator):
     return user_repo.create(db, user)
 
 
-def get_user(db: Session, user_id):
-    return user_repo.get(db, user_id)
+def get_user(db: Session, user_id, current_user=None):
+    if current_user is not None:
+        require_self_or_admin(str(user_id), current_user)
+    user = user_repo.get(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
 def list_users(db: Session):
@@ -50,9 +58,10 @@ def list_users(db: Session):
 
 
 def update_user(db: Session, user_id, payload: UserUpdate, current_user):
+    require_self_or_admin(str(user_id), current_user)
     user = user_repo.get(db, user_id)
     if user is None:
-        return None
+        raise HTTPException(status_code=404, detail="User not found")
     if payload.full_name is not None:
         user.full_name = payload.full_name
     if payload.phone is not None:
@@ -65,7 +74,10 @@ def update_user(db: Session, user_id, payload: UserUpdate, current_user):
 
 
 def delete_user(db: Session, user_id):
-    return user_repo.delete(db, user_id)
+    deleted = user_repo.delete(db, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found")
+    return True
 
 
 def enable_mfa(db: Session, user: User, code: str) -> bool:
