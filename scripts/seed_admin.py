@@ -19,7 +19,10 @@ if not email or not password:
 db = SessionLocal()
 try:
     existing = user_repository.get_by_email(db, email)
-    if existing:
+    if existing and "--reset-password" in sys.argv:
+        user_repository.set_password(db, existing, hash_password(password))
+        print(f"Password reset for: {email}")
+    elif existing:
         print(f"Admin already exists: {email}")
     else:
         user = User(

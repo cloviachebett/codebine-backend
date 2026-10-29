@@ -3,8 +3,11 @@ from uuid import uuid4
 
 import pytest
 
+from main import app
+from models._enums import AccountStatus
 from models.incident_reports import IncidentReport
 from models.system_audit_logs import SystemAuditLog
+from services.current_user import get_current_user
 
 URL = "/api/v1/incidents"
 
@@ -15,6 +18,15 @@ def sector(db_session, make_sector):
     db_session.add(item)
     db_session.commit()
     return item
+
+
+@pytest.fixture(autouse=True)
+def reporter(db_session, make_user, client):
+    user = make_user(full_name="Field Analyst", account_status=AccountStatus.ACTIVE)
+    db_session.add(user)
+    db_session.commit()
+    app.dependency_overrides[get_current_user] = lambda: user
+    return user
 
 
 def body(sector, **overrides):
@@ -32,7 +44,7 @@ def count_reports(db_session):
     return db_session.query(IncidentReport).count()
 
 
-def test_create_returns_the_saved_report(client, sector, db_session):
+def test_create_returns_the_saved_report(client, sector, db_session, reporter):
     response = client.post(URL, json=body(sector))
 
     assert response.status_code == 201
@@ -41,7 +53,8 @@ def test_create_returns_the_saved_report(client, sector, db_session):
     assert data["district_name"] == "Ngororero"
     assert data["sector_name"] == "Bwira"
     assert data["description"] == "Minor landslide blocking secondary access paths."
-    assert data["reported_by"] is None
+    assert data["reported_by"] == str(reporter.user_id)
+    assert data["reporter_name"] == "Field Analyst"
     assert "status" not in data
     reported_at = datetime.fromisoformat(data["reported_at"])
     assert abs(datetime.now(timezone.utc) - reported_at) < timedelta(minutes=1)
@@ -181,3 +194,10 @@ def test_get_one_unknown_id_returns_404(client):
 
 def test_get_one_malformed_id_returns_422(client):
     assert client.get(f"{URL}/not-a-uuid").status_code == 422
+
+
+def test_create_requires_a_login(client, sector, db_session, monkeypatch):
+    app.dependency_overrides.pop(get_current_user, None)
+    monkeypatch.delenv("DEV_USER_ID", raising=False)
+    assert client.post(URL, json=body(sector)).status_code == 401
+    assert count_reports(db_session) == 0

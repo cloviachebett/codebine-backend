@@ -1,4 +1,4 @@
-import random
+import base64
 import os
 import secrets
 import time
@@ -55,8 +55,11 @@ def _generate_ephemeral_keys():
     )
 
 
-def _load_pem(path_env: str, default: str) -> str:
+def _load_pem(path_env: str, default: str, b64_env: str) -> str:
     global _ephemeral_private, _ephemeral_public
+    encoded = os.getenv(b64_env)
+    if encoded:
+        return base64.b64decode(encoded).decode()
     path = os.getenv(path_env, default)
     if os.path.exists(path):
         with open(path, "r") as f:
@@ -73,11 +76,15 @@ def _load_pem(path_env: str, default: str) -> str:
 
 
 def load_private_key() -> str:
-    return _load_pem("JWT_PRIVATE_KEY_PATH", "credentials/private.pem")
+    return _load_pem(
+        "JWT_PRIVATE_KEY_PATH", "credentials/private.pem", "JWT_PRIVATE_KEY_B64"
+    )
 
 
 def load_public_key() -> str:
-    return _load_pem("JWT_PUBLIC_KEY_PATH", "credentials/public.pem")
+    return _load_pem(
+        "JWT_PUBLIC_KEY_PATH", "credentials/public.pem", "JWT_PUBLIC_KEY_B64"
+    )
 
 
 def hash_password(password: str) -> str:
@@ -196,7 +203,7 @@ def blacklist_token(jti: str, expires_in: int) -> None:
     _blacklisted[jti] = time.time() + expires_in
 
 
-def rotate_refresh_token(old_refresh_token: str) -> dict:
+def rotate_refresh_token(old_refresh_token: str, db: Session) -> dict:
     payload = decode_token(old_refresh_token)
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(
@@ -207,18 +214,31 @@ def rotate_refresh_token(old_refresh_token: str) -> dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked"
         )
+    user = _load_user(payload.get("sub"), db)
+    if user is None or user.account_status != AccountStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked"
+        )
     _refresh_tokens.discard(jti)
     ttl = int(payload.get("exp", 0) - datetime.now(timezone.utc).timestamp())
     if ttl > 0:
         blacklist_token(jti, ttl)
-    user_id = payload.get("sub")
-    new_access = create_access_token(user_id, UserRole.ANALYST)
-    new_refresh = create_refresh_token(user_id)
+    role = UserRole(user.role)
     return {
-        "access_token": new_access,
-        "refresh_token": new_refresh,
+        "access_token": create_access_token(str(user.user_id), role),
+        "refresh_token": create_refresh_token(str(user.user_id)),
         "token_type": "bearer",
+        "role": role.value,
     }
+
+
+def _load_user(user_id: Optional[str], db: Session) -> Optional[User]:
+    from uuid import UUID
+
+    try:
+        return db.get(User, UUID(str(user_id)))
+    except (TypeError, ValueError):
+        return None
 
 
 security = HTTPBearer(auto_error=False)
@@ -318,11 +338,14 @@ def require_self_or_admin(user_id: str, current_user: User):
 
 
 _otp_store: dict[str, tuple[str, float]] = {}
+_otp_failures: dict[str, int] = {}
+OTP_MAX_ATTEMPTS = 5
 
 
 def generate_email_otp(email: str) -> str:
-    code = f"{random.randint(0, 999999):06d}"
+    code = f"{secrets.randbelow(1_000_000):06d}"
     _otp_store[email.lower()] = (code, __import__("time").time() + 300)
+    _otp_failures.pop(email.lower(), None)
     from services.email import send_otp_email
 
     send_otp_email(email, code)
@@ -337,7 +360,13 @@ def verify_email_otp(email: str, code: str) -> bool:
     if __import__("time").time() > expires:
         _otp_store.pop(email.lower(), None)
         return False
-    if stored != str(code).strip():
+    if not secrets.compare_digest(stored, str(code).strip()):
+        failures = _otp_failures.get(email.lower(), 0) + 1
+        _otp_failures[email.lower()] = failures
+        if failures >= OTP_MAX_ATTEMPTS:
+            _otp_store.pop(email.lower(), None)
+            _otp_failures.pop(email.lower(), None)
         return False
     _otp_store.pop(email.lower(), None)
+    _otp_failures.pop(email.lower(), None)
     return True

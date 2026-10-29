@@ -64,17 +64,40 @@ def update_user(db, user_id, payload: UserUpdate, current_user):
     if payload.phone is not None:
         user.phone = payload.phone
     if payload.account_status is not None:
-        from models._enums import AccountStatus
-
-        user.account_status = AccountStatus(payload.account_status)
+        if current_user.role != UserRole.ADMIN:
+            raise HTTPException(
+                status_code=403, detail="Only an admin can change account status"
+            )
+        if str(user.user_id) == str(current_user.user_id):
+            raise HTTPException(
+                status_code=400, detail="You cannot change your own account status"
+            )
+        try:
+            user.account_status = AccountStatus(payload.account_status)
+        except ValueError:
+            raise HTTPException(
+                status_code=422, detail="account_status must be ACTIVE or SUSPENDED"
+            )
     return user_repo.update_fields(db, user)
 
 
-def delete_user(db, user_id):
+def delete_user(db, user_id, current_user=None):
+    if current_user is not None and str(user_id) == str(current_user.user_id):
+        raise HTTPException(
+            status_code=400, detail="You cannot delete your own account"
+        )
     deleted = user_repo.delete(db, user_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="User not found")
     return True
+
+
+def _is_expired(expires) -> bool:
+    if expires is None:
+        return True
+    if expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    return expires <= datetime.now(timezone.utc)
 
 
 def _hash_token(token: str) -> str:
@@ -91,16 +114,14 @@ def request_password_reset(db, email: str) -> None:
             _hash_token(token),
             datetime.now(timezone.utc) + timedelta(hours=1),
         )
-        print(f"[RESET TOKEN for {email}]: {token}")
+        from services.email import send_password_reset_email
+
+        send_password_reset_email(user.email, token)
 
 
 def reset_user_password(db, token: str, new_password: str) -> bool:
     user = user_repo.get_by_reset_token(db, _hash_token(token))
-    if (
-        user is None
-        or user.reset_token_expires is None
-        or user.reset_token_expires <= datetime.now(timezone.utc)
-    ):
+    if user is None or _is_expired(user.reset_token_expires):
         return False
     user_repo.set_password(db, user, hash_password(new_password))
     user_repo.clear_reset_token(db, user)
@@ -109,11 +130,7 @@ def reset_user_password(db, token: str, new_password: str) -> bool:
 
 def verify_user_email(db, token: str) -> bool:
     user = user_repo.get_by_verification_token(db, _hash_token(token))
-    if (
-        user is None
-        or user.verification_token_expires is None
-        or user.verification_token_expires <= datetime.now(timezone.utc)
-    ):
+    if user is None or _is_expired(user.verification_token_expires):
         return False
     user_repo.set_verified(db, user)
     return True
@@ -123,7 +140,4 @@ def validate_reset_token(db, token: str) -> bool:
     user = user_repo.get_by_reset_token(db, _hash_token(token))
     if user is None:
         return False
-    return (
-        user.reset_token_expires is not None
-        and user.reset_token_expires > datetime.now(timezone.utc)
-    )
+    return not _is_expired(user.reset_token_expires)
