@@ -4,15 +4,21 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from database import get_db
+from models.users import User
 from schemas.incidents import IncidentCreate, IncidentRead
 from services import incidents as incident_service
+from services.current_user import get_current_user
 
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
 
 
 @router.post("", response_model=IncidentRead, status_code=status.HTTP_201_CREATED)
-def create_incident(payload: IncidentCreate, db: Session = Depends(get_db)):
-    return incident_service.create_incident(db, payload)
+def create_incident(
+    payload: IncidentCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return incident_service.create_incident(db, payload, user.user_id)
 
 
 @router.get("", response_model=list[IncidentRead])

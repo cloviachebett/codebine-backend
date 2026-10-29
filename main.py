@@ -1,4 +1,7 @@
+import os
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from routers.alerts import router as alerts_router
 from routers.incidents import router as incidents_router
@@ -16,6 +19,20 @@ from services.system_logs import AutomatedAuditMiddleware
 app = FastAPI(title="TerraWatch", version="0.1.0")
 
 app.add_middleware(AutomatedAuditMiddleware)
+
+DEFAULT_CORS_ORIGINS = "http://localhost:3000,https://codebine-dashboard.vercel.app"
+CORS_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(incidents_router)
 app.include_router(alerts_router)

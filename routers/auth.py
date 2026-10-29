@@ -23,11 +23,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(payload: RefreshPayload):
+def refresh(payload: RefreshPayload, db: Session = Depends(get_db)):
     from auth_dependency import rotate_refresh_token
 
-    result = rotate_refresh_token(payload.refresh_token)
-    return TokenResponse(**result, role="ANALYST")
+    return TokenResponse(**rotate_refresh_token(payload.refresh_token, db))
 
 
 @router.post("/logout")
