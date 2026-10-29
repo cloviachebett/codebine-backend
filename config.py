@@ -1,3 +1,4 @@
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,6 +7,10 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
+    chirps_collection: str = Field(
+        default="UCSB-CHG/CHIRPS/DAILY",
+        validation_alias=AliasChoices("CHIRPS_ID", "CHIRPS_COLLECTION"),
+    )
     boundary_base_dir: str = "."
     boundary_sector_property: str = "ADM3_EN"
     boundary_district_property: str = "ADM2_EN"
