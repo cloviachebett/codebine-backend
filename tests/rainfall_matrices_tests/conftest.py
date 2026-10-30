@@ -13,7 +13,8 @@ from sqlalchemy.pool import StaticPool
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
-from models._enums import GeologyClass
+from auth_dependency import require_admin
+from models._enums import GeologyClass, UserRole
 from models.dataset_metadata import DatasetMetadata
 from models.rainfall_matrices import RainfallMatrix
 from models.sectors import Sector
@@ -38,6 +39,15 @@ def _enforce_foreign_keys(dbapi_connection, _record):
 
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _signed_in_as_admin():
+    app.dependency_overrides[require_admin] = lambda: SimpleNamespace(
+        role=UserRole.ADMIN
+    )
+    yield
+    app.dependency_overrides.pop(require_admin, None)
 
 
 @pytest.fixture(autouse=True)

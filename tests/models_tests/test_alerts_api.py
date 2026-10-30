@@ -1,12 +1,25 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
-from models._enums import AlertStatus, RiskLevel
+from auth_dependency import require_admin
+from main import app
+
+from models._enums import AlertStatus, RiskLevel, UserRole
 from models.emergency_alerts import EmergencyAlert
 from models.system_audit_logs import SystemAuditLog
 
 URL = "/api/v1/alerts"
+
+
+@pytest.fixture(autouse=True)
+def _signed_in_as_admin():
+    app.dependency_overrides[require_admin] = lambda: SimpleNamespace(
+        role=UserRole.ADMIN
+    )
+    yield
+    app.dependency_overrides.pop(require_admin, None)
 
 
 @pytest.fixture

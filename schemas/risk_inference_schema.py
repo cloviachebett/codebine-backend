@@ -20,3 +20,14 @@ class RiskInferenceResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RiskInferenceListItem(BaseModel):
+    inference_id: uuid.UUID
+    sector_id: uuid.UUID
+    sector_name: str
+    district_name: str
+    model_version_id: uuid.UUID | None
+    prediction_time: datetime
+    risk_level: str
+    risk_score: float

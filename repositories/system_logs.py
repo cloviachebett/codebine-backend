@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy.orm import Session
 
@@ -32,6 +33,21 @@ class AuditLogRepository:
             .offset(skip)
             .limit(limit)
             .all()
+        )
+
+    def save(self, db: Session, log: SystemAuditLog) -> None:
+        db.add(log)
+        db.commit()
+
+    def exists_since(self, db: Session, action_type: str, since: datetime) -> bool:
+        return (
+            db.query(self.model.log_id)
+            .filter(
+                self.model.action_type == action_type,
+                self.model.created_at >= since,
+            )
+            .first()
+            is not None
         )
 
 

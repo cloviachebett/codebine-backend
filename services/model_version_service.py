@@ -1,13 +1,17 @@
 import os
 import uuid
 import joblib
+from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from repositories.model_version_repository import model_version_repository
-from models._enums import RiskLevel
+from models._enums import ModelStatus, RiskLevel
+from models.model_versions import ModelVersion
 from models.risk_inferences import RiskInference
-from models.prediction_features import PredictionFeature
+from repositories.risk_inference_repository import risk_inference_repository
+from repositories.sectors import sector_repository
+from services import storage
 
 
 class ModelVersionService:
@@ -31,7 +35,15 @@ class ModelVersionService:
         # Load a model from disk, resolving paths safely inside the project.
         pkl_path = str(model_record.model_path)
 
-        if os.path.isabs(pkl_path) and pkl_path.startswith("/assets/"):
+        if pkl_path.startswith("s3://"):
+            try:
+                pkl_path = storage.download_model(pkl_path)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Could not download the model from S3: {e}",
+                )
+        elif os.path.isabs(pkl_path) and pkl_path.startswith("/assets/"):
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             pkl_path = os.path.join(project_root, pkl_path.lstrip("/"))
         elif not os.path.isabs(pkl_path):
@@ -71,6 +83,38 @@ class ModelVersionService:
             recall=payload_data["recall"],
             f1_score=payload_data["f1_score"],
             model_status=payload_data["model_status"],
+        )
+
+    def active_model(self) -> ModelVersion:
+        wanted = os.getenv("RISK_MODEL_VERSION_ID")
+        if wanted:
+            model = self.repo.get_by_id(self.db, uuid.UUID(wanted))
+            if model is None:
+                raise LookupError(f"RISK_MODEL_VERSION_ID {wanted} was not found")
+            return model
+        for model_status in (
+            ModelStatus.DEPLOYED,
+            ModelStatus.READY,
+            ModelStatus.TRAINING,
+        ):
+            model = self.repo.newest_with_status(self.db, model_status)
+            if model is not None:
+                return model
+        raise LookupError("No model version is registered")
+
+    def fetch_active(self) -> ModelVersion:
+        try:
+            return self.active_model()
+        except LookupError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
+
+    def predict_from_request(self, model_version_id: uuid.UUID, payload):
+        return self.predict_from_rainfall(
+            model_version_id,
+            payload.sector_id,
+            [obs.model_dump() for obs in payload.rainfall_observations],
         )
 
     def fetch_version(self, model_version_id: uuid.UUID):
@@ -166,12 +210,30 @@ class ModelVersionService:
             else:
                 value = latest_obs.get(name)
                 if value is None:
+                    value = self._sector_feature(sector, name)
+                if value is None:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Missing feature value for {name}",
                     )
                 row.append(value)
         return row
+
+    @staticmethod
+    def _sector_feature(sector, name: str):
+        soil = sector.soil_features if isinstance(sector.soil_features, dict) else {}
+        if name in soil:
+            return soil[name]
+        if name.startswith("soil_") and name[5:] in soil:
+            return soil[name[5:]]
+        if name in sector.__table__.columns.keys():
+            value = getattr(sector, name)
+            if hasattr(value, "value"):
+                return value.value
+            if isinstance(value, Decimal):
+                return float(value)
+            return value
+        return None
 
     def calculate_prediction(
         self, model_version_id: uuid.UUID, feature_matrix: list
@@ -226,9 +288,7 @@ class ModelVersionService:
         sector_id: uuid.UUID,
         rainfall_observations: list,
     ):
-        from models.sectors import Sector
-
-        sector = self.db.get(Sector, sector_id)
+        sector = sector_repository.get(self.db, sector_id)
         if not sector:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -252,6 +312,7 @@ class ModelVersionService:
         model = self._get_model(model_record)
 
         feature_row = self._build_feature_row(model, sector, latest_obs)
+        model_inputs = dict(zip(model.feature_names_in_, feature_row))
         risk_score = self.calculate_prediction(model_version_id, [feature_row])
 
         inference = RiskInference(
@@ -260,25 +321,16 @@ class ModelVersionService:
             risk_score=risk_score,
             risk_level=self._classify_risk(risk_score),
         )
-        self.db.add(inference)
-        self.db.flush()
-
-        feature_snapshot = PredictionFeature(
-            inference_id=inference.inference_id,
-            historical_features={
+        risk_inference_repository.save_with_snapshot(
+            self.db,
+            inference,
+            {
                 "rainfall_observations": rainfall_observations,
                 "sector_id": str(sector_id),
                 "landcover": sector.land_cover_class,
+                "model_inputs": model_inputs,
             },
         )
-        self.db.add(feature_snapshot)
-        self.db.flush()
-        self.db.refresh(feature_snapshot)
-
-        inference.feature_snapshot_id = feature_snapshot.feature_snapshot_id
-
-        self.db.commit()
-        self.db.refresh(inference)
         return {
             "inference_id": inference.inference_id,
             "risk_score": risk_score,

@@ -4,7 +4,9 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from auth_dependency import require_admin
 from database import get_db
+from models.users import User
 from schemas.rainfall_matrices import (
     RainfallMatrixRead,
     RainfallStatus,
@@ -41,13 +43,9 @@ def get_sector_matrix(
 def sync_rainfall(
     payload: RainfallSyncRequest,
     db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
 ):
-    return rainfall_service.sync_rainfall(
-        db,
-        sector_ids=[payload.sector_id] if payload.sector_id else None,
-        start=payload.start_date,
-        end=payload.end_date,
-    )
+    return rainfall_service.sync_from_request(db, payload)
 
 
 @router.get("/status", response_model=RainfallStatus)

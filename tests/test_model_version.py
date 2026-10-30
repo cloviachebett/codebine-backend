@@ -3,14 +3,17 @@ import os
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from auth_dependency import require_admin
 from database import Base, get_db
 from main import app
+from models._enums import UserRole
 
 engine = create_engine(
     "sqlite:///:memory:",
@@ -27,6 +30,15 @@ def _enforce_foreign_keys(dbapi_connection, _record):
 
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _signed_in_as_admin():
+    app.dependency_overrides[require_admin] = lambda: SimpleNamespace(
+        role=UserRole.ADMIN
+    )
+    yield
+    app.dependency_overrides.pop(require_admin, None)
 
 
 @pytest.fixture(autouse=True)

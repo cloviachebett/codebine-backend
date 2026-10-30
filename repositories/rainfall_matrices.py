@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from models.dataset_metadata import DatasetMetadata
 from models.rainfall_matrices import RainfallMatrix
 
 
@@ -98,6 +99,47 @@ class RainfallMatrixRepository:
             "latest_observation": latest,
             "sectors_with_data": sectors,
         }
+
+    def latest_per_sector(self, db: Session) -> dict[UUID, RainfallMatrix]:
+        newest = (
+            db.query(
+                self.model.sector_id,
+                func.max(self.model.observation_time).label("latest"),
+            )
+            .group_by(self.model.sector_id)
+            .subquery()
+        )
+        rows = (
+            db.query(self.model)
+            .join(
+                newest,
+                (self.model.sector_id == newest.c.sector_id)
+                & (self.model.observation_time == newest.c.latest),
+            )
+            .all()
+        )
+        return {row.sector_id: row for row in rows}
+
+    def find_dataset(
+        self, db: Session, dataset_name: str, version: str
+    ) -> DatasetMetadata | None:
+        return (
+            db.query(DatasetMetadata)
+            .filter(
+                DatasetMetadata.dataset_name == dataset_name,
+                DatasetMetadata.version == version,
+            )
+            .first()
+        )
+
+    def save_dataset(self, db: Session, dataset: DatasetMetadata) -> DatasetMetadata:
+        db.add(dataset)
+        db.commit()
+        db.refresh(dataset)
+        return dataset
+
+    def rollback(self, db: Session) -> None:
+        db.rollback()
 
 
 rainfall_matrix_repository = RainfallMatrixRepository()
