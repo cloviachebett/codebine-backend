@@ -1,5 +1,6 @@
 import uuid
 from sqlalchemy.orm import Session
+from models._enums import ModelStatus
 from models.model_versions import ModelVersion
 
 
@@ -52,6 +53,16 @@ class ModelVersionRepository:
                 self.model.model_name == model_name,
                 self.model.version_code == version_code,
             )
+            .first()
+        )
+
+    def newest_with_status(
+        self, db: Session, model_status: ModelStatus
+    ) -> ModelVersion | None:
+        return (
+            db.query(self.model)
+            .filter(self.model.model_status == model_status)
+            .order_by(self.model.created_at.desc())
             .first()
         )
 

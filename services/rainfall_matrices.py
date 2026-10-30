@@ -13,6 +13,8 @@ from models.dataset_metadata import DatasetMetadata
 from models.sectors import Sector
 from models.system_audit_logs import SystemAuditLog
 from repositories.rainfall_matrices import RainfallMatrixRepository, utc_date
+from repositories.sectors import sector_repository
+from repositories.system_logs import audit_log_repository
 from services.boundary import resolve_boundary_geometry
 from services.chirps_gee import CHIRPSGEEService, SectorArea
 from services.geometry import compute_centroid
@@ -65,7 +67,7 @@ class RainfallService:
         start: date | None = None,
         end: date | None = None,
     ):
-        sector = db.query(Sector).filter(Sector.sector_id == sector_id).first()
+        sector = sector_repository.get(db, sector_id)
 
         if sector is None:
             raise HTTPException(
@@ -261,10 +263,8 @@ class RainfallService:
         db: Session,
         sector_ids: Sequence[uuid.UUID] | None,
     ) -> list[Sector]:
-        query = db.query(Sector)
-
         if sector_ids:
-            found = query.filter(Sector.sector_id.in_(list(sector_ids))).all()
+            found = sector_repository.get_many(db, list(sector_ids))
 
             missing = set(sector_ids) - {sector.sector_id for sector in found}
 
@@ -276,10 +276,7 @@ class RainfallService:
 
             return found
 
-        found = query.order_by(
-            Sector.district_name,
-            Sector.sector_name,
-        ).all()
+        found = sector_repository.get_all(db)
 
         if not found:
             raise LookupError("There are no sectors to fetch rainfall for")
@@ -313,14 +310,7 @@ class RainfallService:
         self,
         db: Session,
     ) -> DatasetMetadata | None:
-        return (
-            db.query(DatasetMetadata)
-            .filter(
-                DatasetMetadata.dataset_name == DATASET_NAME,
-                DatasetMetadata.version == DATASET_VERSION,
-            )
-            .first()
-        )
+        return self.rainfall_repository.find_dataset(db, DATASET_NAME, DATASET_VERSION)
 
     def _begin_run(self, db: Session) -> DatasetMetadata:
         dataset = self._find_dataset(db)
@@ -333,13 +323,9 @@ class RainfallService:
                 file_path=self.settings.chirps_collection,
                 version=DATASET_VERSION,
             )
-            db.add(dataset)
 
         dataset.processing_status = ProcessingStatus.PROCESSING
-        db.commit()
-        db.refresh(dataset)
-
-        return dataset
+        return self.rainfall_repository.save_dataset(db, dataset)
 
     def _finish_run(
         self,
@@ -355,16 +341,15 @@ class RainfallService:
         if ok:
             dataset.last_processed_at = datetime.now(timezone.utc)
 
-        db.add(
+        audit_log_repository.save(
+            db,
             SystemAuditLog(
                 action_type=("RAINFALL_SYNC_SUCCESS" if ok else "RAINFALL_SYNC_FAILED"),
                 entity_type="dataset_metadata",
                 entity_id=str(dataset.dataset_id),
                 execution_details=details,
-            )
+            ),
         )
-
-        db.commit()
 
 
 rainfall_service = RainfallService()

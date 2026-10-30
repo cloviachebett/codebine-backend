@@ -5,9 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from repositories.risk_inference_repository import risk_inference_repository
 from models._enums import RiskLevel
-from models.model_versions import ModelVersion
-from models.risk_inferences import RiskInference
-from models.sectors import Sector
+from repositories.model_version_repository import model_version_repository
+from repositories.sectors import sector_repository
 
 
 class RiskInferenceService:
@@ -22,7 +21,7 @@ class RiskInferenceService:
         risk_level: str,
         risk_score: float,
     ):
-        sector = self.db.get(Sector, sector_id)
+        sector = sector_repository.get(self.db, sector_id)
         if not sector:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -30,7 +29,9 @@ class RiskInferenceService:
             )
 
         if model_version_id is not None:
-            model_version = self.db.get(ModelVersion, model_version_id)
+            model_version = model_version_repository.get_by_id(
+                self.db, model_version_id
+            )
             if not model_version:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -42,7 +43,7 @@ class RiskInferenceService:
                 self.db, model_version_id, sector_id, risk_level, risk_score
             )
         except IntegrityError:
-            self.db.rollback()
+            self.repo.rollback(self.db)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Could not record prediction. Referenced records may be missing.",
@@ -66,11 +67,7 @@ class RiskInferenceService:
         latest_only: bool = False,
         limit: int = 500,
     ) -> list[dict]:
-        query = self.db.query(RiskInference, Sector).join(
-            Sector, RiskInference.sector_id == Sector.sector_id
-        )
-        if district:
-            query = query.filter(Sector.district_name == district)
+        level = None
         if risk_level:
             try:
                 level = RiskLevel(risk_level.upper())
@@ -79,23 +76,20 @@ class RiskInferenceService:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=f"Unknown risk level: {risk_level}",
                 )
-            query = query.filter(RiskInference.risk_level == level)
-        if start:
-            query = query.filter(
-                RiskInference.prediction_time
-                >= datetime.combine(start, time.min, tzinfo=timezone.utc)
+        rows = self.repo.list_with_sectors(
+            self.db,
+            district=district,
+            risk_level=level,
+            start=datetime.combine(start, time.min, tzinfo=timezone.utc)
+            if start
+            else None,
+            end_exclusive=datetime.combine(
+                end + timedelta(days=1), time.min, tzinfo=timezone.utc
             )
-        if end:
-            query = query.filter(
-                RiskInference.prediction_time
-                < datetime.combine(
-                    end + timedelta(days=1), time.min, tzinfo=timezone.utc
-                )
-            )
-        query = query.order_by(RiskInference.prediction_time.desc())
-        if not latest_only:
-            query = query.limit(limit)
-        rows = query.all()
+            if end
+            else None,
+            limit=None if latest_only else limit,
+        )
         seen: set[uuid.UUID] = set()
         items = []
         for inference, sector in rows:

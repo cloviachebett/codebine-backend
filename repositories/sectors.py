@@ -36,6 +36,9 @@ class SectorRepository:
         )
         return query.offset(skip).limit(limit).all()
 
+    def get_many(self, db: Session, sector_ids: list[uuid.UUID]) -> list[Sector]:
+        return db.query(self.model).filter(self.model.sector_id.in_(sector_ids)).all()
+
     def get_by_location(self, db: Session, district_name: str, sector_name: str):
         return (
             db.query(self.model)

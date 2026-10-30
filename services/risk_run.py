@@ -1,19 +1,19 @@
 import logging
 import os
 import threading
-import uuid
 from datetime import datetime, time, timezone
 from typing import Any, Callable
 
 from fastapi import HTTPException
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from models._enums import RiskLevel
 from models.rainfall_matrices import RainfallMatrix
-from models.risk_inferences import RiskInference
-from models.sectors import Sector
 from models.system_audit_logs import SystemAuditLog
+from repositories.rainfall_matrices import rainfall_matrix_repository
+from repositories.risk_inference_repository import risk_inference_repository
+from repositories.sectors import sector_repository
+from repositories.system_logs import audit_log_repository
 from schemas.alerts import AlertCreate
 from services import alerts as alert_service
 from services import storage
@@ -42,27 +42,6 @@ def _start_of_today() -> datetime:
     )
 
 
-def latest_rainfall(db: Session) -> dict[uuid.UUID, RainfallMatrix]:
-    newest = (
-        db.query(
-            RainfallMatrix.sector_id,
-            func.max(RainfallMatrix.observation_time).label("latest"),
-        )
-        .group_by(RainfallMatrix.sector_id)
-        .subquery()
-    )
-    rows = (
-        db.query(RainfallMatrix)
-        .join(
-            newest,
-            (RainfallMatrix.sector_id == newest.c.sector_id)
-            & (RainfallMatrix.observation_time == newest.c.latest),
-        )
-        .all()
-    )
-    return {row.sector_id: row for row in rows}
-
-
 def _observation(row: RainfallMatrix) -> dict[str, Any]:
     observed = row.observation_time
     if observed.tzinfo is None:
@@ -73,23 +52,11 @@ def _observation(row: RainfallMatrix) -> dict[str, Any]:
     }
 
 
-def _predicted_today(db: Session, model_id: uuid.UUID) -> set[uuid.UUID]:
-    rows = (
-        db.query(RiskInference.sector_id)
-        .filter(
-            RiskInference.model_version_id == model_id,
-            RiskInference.prediction_time >= _start_of_today(),
-        )
-        .all()
-    )
-    return {sector_id for (sector_id,) in rows}
-
-
 def _sync_rainfall(db: Session, rainfall) -> dict[str, Any]:
     try:
         return (rainfall or rainfall_service).run_sync(db)
     except Exception as exc:
-        db.rollback()
+        rainfall_matrix_repository.rollback(db)
         logger.warning("Rainfall sync failed, using stored rainfall: %s", exc)
         return {"error": str(exc)}
 
@@ -100,8 +67,10 @@ def run_daily_risk(db: Session, sync: bool = True, rainfall=None) -> dict[str, A
         summary["rainfall"] = _sync_rainfall(db, rainfall)
 
     model = ModelVersionService(db).active_model()
-    rain = latest_rainfall(db)
-    done_today = _predicted_today(db, model.model_version_id)
+    rain = rainfall_matrix_repository.latest_per_sector(db)
+    done_today = risk_inference_repository.sector_ids_predicted_since(
+        db, model.model_version_id, _start_of_today()
+    )
     predictor = ModelVersionService(db)
 
     levels = {level.value: 0 for level in RiskLevel}
@@ -111,7 +80,7 @@ def run_daily_risk(db: Session, sync: bool = True, rainfall=None) -> dict[str, A
     failed: list[dict[str, str]] = []
     results: list[dict[str, Any]] = []
 
-    for sector in db.query(Sector).order_by(Sector.district_name, Sector.sector_name):
+    for sector in sector_repository.get_all(db):
         row = rain.get(sector.sector_id)
         if row is None:
             skipped_no_rainfall += 1
@@ -142,7 +111,7 @@ def run_daily_risk(db: Session, sync: bool = True, rainfall=None) -> dict[str, A
                 }
             )
         except HTTPException as exc:
-            db.rollback()
+            risk_inference_repository.rollback(db)
             failed.append({"sector": sector.sector_name, "error": str(exc.detail)})
 
     summary.update(
@@ -157,41 +126,33 @@ def run_daily_risk(db: Session, sync: bool = True, rainfall=None) -> dict[str, A
         }
     )
     summary["archive"] = storage.save_daily_run(summary, results)
-    db.add(
+    audit_log_repository.save(
+        db,
         SystemAuditLog(
             action_type=RUN_OK,
             entity_type="risk_inferences",
             entity_id=str(model.model_version_id),
             execution_details=summary,
-        )
+        ),
     )
-    db.commit()
     return summary
 
 
 def ran_today(db: Session) -> bool:
-    return (
-        db.query(SystemAuditLog.log_id)
-        .filter(
-            SystemAuditLog.action_type == RUN_OK,
-            SystemAuditLog.created_at >= _start_of_today(),
-        )
-        .first()
-        is not None
-    )
+    return audit_log_repository.exists_since(db, RUN_OK, _start_of_today())
 
 
 def _record_failure(session_factory: Callable[[], Session], error: Exception) -> None:
     db = session_factory()
     try:
-        db.add(
+        audit_log_repository.save(
+            db,
             SystemAuditLog(
                 action_type=RUN_FAILED,
                 entity_type="risk_inferences",
                 execution_details={"error": str(error)},
-            )
+            ),
         )
-        db.commit()
     finally:
         db.close()
 

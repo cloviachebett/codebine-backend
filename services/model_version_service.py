@@ -9,7 +9,8 @@ from repositories.model_version_repository import model_version_repository
 from models._enums import ModelStatus, RiskLevel
 from models.model_versions import ModelVersion
 from models.risk_inferences import RiskInference
-from models.prediction_features import PredictionFeature
+from repositories.risk_inference_repository import risk_inference_repository
+from repositories.sectors import sector_repository
 from services import storage
 
 
@@ -87,7 +88,7 @@ class ModelVersionService:
     def active_model(self) -> ModelVersion:
         wanted = os.getenv("RISK_MODEL_VERSION_ID")
         if wanted:
-            model = self.db.get(ModelVersion, uuid.UUID(wanted))
+            model = self.repo.get_by_id(self.db, uuid.UUID(wanted))
             if model is None:
                 raise LookupError(f"RISK_MODEL_VERSION_ID {wanted} was not found")
             return model
@@ -96,12 +97,7 @@ class ModelVersionService:
             ModelStatus.READY,
             ModelStatus.TRAINING,
         ):
-            model = (
-                self.db.query(ModelVersion)
-                .filter(ModelVersion.model_status == model_status)
-                .order_by(ModelVersion.created_at.desc())
-                .first()
-            )
+            model = self.repo.newest_with_status(self.db, model_status)
             if model is not None:
                 return model
         raise LookupError("No model version is registered")
@@ -292,9 +288,7 @@ class ModelVersionService:
         sector_id: uuid.UUID,
         rainfall_observations: list,
     ):
-        from models.sectors import Sector
-
-        sector = self.db.get(Sector, sector_id)
+        sector = sector_repository.get(self.db, sector_id)
         if not sector:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -327,26 +321,16 @@ class ModelVersionService:
             risk_score=risk_score,
             risk_level=self._classify_risk(risk_score),
         )
-        self.db.add(inference)
-        self.db.flush()
-
-        feature_snapshot = PredictionFeature(
-            inference_id=inference.inference_id,
-            historical_features={
+        risk_inference_repository.save_with_snapshot(
+            self.db,
+            inference,
+            {
                 "rainfall_observations": rainfall_observations,
                 "sector_id": str(sector_id),
                 "landcover": sector.land_cover_class,
                 "model_inputs": model_inputs,
             },
         )
-        self.db.add(feature_snapshot)
-        self.db.flush()
-        self.db.refresh(feature_snapshot)
-
-        inference.feature_snapshot_id = feature_snapshot.feature_snapshot_id
-
-        self.db.commit()
-        self.db.refresh(inference)
         return {
             "inference_id": inference.inference_id,
             "risk_score": risk_score,
