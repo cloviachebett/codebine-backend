@@ -1,6 +1,5 @@
 import json
 import threading
-import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -14,11 +13,9 @@ from main import app
 from models._enums import GeologyClass, ModelStatus, RiskLevel, UserRole
 from models.risk_inferences import RiskInference
 from models.system_audit_logs import SystemAuditLog
-from routers.risk_runs import get_session_factory
 from services import risk_run, storage
 from services.current_user import get_current_user as signed_in_user
 from services.model_version_service import ModelVersionService
-from services.rainfall_matrices import RainfallService
 
 MODEL_FILE = str(Path(__file__).resolve().parents[2] / "assets" / "model_v1.pkl")
 ADMIN = SimpleNamespace(role=UserRole.ADMIN)
@@ -69,7 +66,6 @@ def world(db_session, make_sector, make_rainfall, make_model_version):
         "/api/v1/rainfall/sync",
         "/analytics/models",
         "/analytics/inferences",
-        "/api/v1/risk-runs",
     ],
 )
 def test_write_endpoints_need_an_admin(client, path):
@@ -78,34 +74,10 @@ def test_write_endpoints_need_an_admin(client, path):
 
 @pytest.mark.parametrize(
     "path",
-    ["/analytics/inferences", "/api/v1/risk-runs/latest", "/analytics/models/active"],
+    ["/analytics/inferences", "/analytics/models/active"],
 )
 def test_new_read_endpoints_need_login(client, path):
     assert client.get(path).status_code == 401
-
-
-def test_run_now_from_the_dashboard(
-    client, db_session, world, as_admin, monkeypatch, TestingSessionLocal
-):
-    monkeypatch.setattr(RainfallService, "run_sync", lambda self, db: {"ok": True})
-    app.dependency_overrides[get_session_factory] = lambda: TestingSessionLocal
-    started = client.post("/api/v1/risk-runs")
-    assert started.status_code == 202
-    deadline = time.monotonic() + 30
-    while risk_run.is_running() and time.monotonic() < deadline:
-        time.sleep(0.05)
-    latest = client.get("/api/v1/risk-runs/latest").json()
-    assert latest["running"] is False
-    assert latest["last_run"]["status"] == "OK"
-    assert latest["last_run"]["details"]["predictions"] == 2
-
-
-def test_run_now_refuses_a_second_run(client, as_admin):
-    assert risk_run._running.acquire(blocking=False)
-    try:
-        assert client.post("/api/v1/risk-runs").status_code == 409
-    finally:
-        risk_run._running.release()
 
 
 def test_failed_run_is_recorded(db_session, world, monkeypatch, TestingSessionLocal):
@@ -114,7 +86,11 @@ def test_failed_run_is_recorded(db_session, world, monkeypatch, TestingSessionLo
 
     monkeypatch.setattr(risk_run, "run_daily_risk", broken)
     assert risk_run.run_with_lock(TestingSessionLocal) is True
-    last = risk_run.last_run(db_session)
+    last = (
+        db_session.query(SystemAuditLog)
+        .filter(SystemAuditLog.action_type == risk_run.RUN_FAILED)
+        .one()
+    )
     assert last.action_type == risk_run.RUN_FAILED
     assert "database went away" in last.execution_details["error"]
 

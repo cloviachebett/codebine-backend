@@ -205,19 +205,6 @@ def ran_today(db: Session) -> bool:
     )
 
 
-def last_run(db: Session) -> SystemAuditLog | None:
-    return (
-        db.query(SystemAuditLog)
-        .filter(SystemAuditLog.action_type.in_([RUN_OK, RUN_FAILED]))
-        .order_by(SystemAuditLog.created_at.desc())
-        .first()
-    )
-
-
-def is_running() -> bool:
-    return _running.locked()
-
-
 def _record_failure(session_factory: Callable[[], Session], error: Exception) -> None:
     db = session_factory()
     try:
@@ -251,15 +238,6 @@ def run_with_lock(session_factory: Callable[[], Session]) -> bool:
     if not _running.acquire(blocking=False):
         return False
     _run_and_release(session_factory)
-    return True
-
-
-def start_in_background(session_factory: Callable[[], Session]) -> bool:
-    if not _running.acquire(blocking=False):
-        return False
-    threading.Thread(
-        target=_run_and_release, args=(session_factory,), daemon=True
-    ).start()
     return True
 
 

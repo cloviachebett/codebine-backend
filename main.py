@@ -12,7 +12,6 @@ from routers.reviews import router as reviews_router
 from routers.risk_inferences_router import router as risk_inferences_router
 from routers.model_versions_router import router as model_versions_router
 from routers.rainfall_matrices import router as rainfall_router
-from routers.risk_runs import router as risk_runs_router
 from routers.auth import router as auth_router
 from routers.users import router as users_router
 from routers.sectors import router as sectors_router
@@ -58,7 +57,6 @@ app.include_router(prediction_features_router)
 app.include_router(system_logs_router)
 app.include_router(model_versions_router)
 app.include_router(rainfall_router)
-app.include_router(risk_runs_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 
