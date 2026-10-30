@@ -114,6 +114,14 @@ class RainfallService:
 
         return info
 
+    def sync_from_request(self, db: Session, payload) -> dict[str, Any]:
+        return self.sync_rainfall(
+            db,
+            sector_ids=[payload.sector_id] if payload.sector_id else None,
+            start=payload.start_date,
+            end=payload.end_date,
+        )
+
     def sync_rainfall(
         self,
         db: Session,

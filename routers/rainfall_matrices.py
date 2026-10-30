@@ -45,12 +45,7 @@ def sync_rainfall(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    return rainfall_service.sync_rainfall(
-        db,
-        sector_ids=[payload.sector_id] if payload.sector_id else None,
-        start=payload.start_date,
-        end=payload.end_date,
-    )
+    return rainfall_service.sync_from_request(db, payload)
 
 
 @router.get("/status", response_model=RainfallStatus)

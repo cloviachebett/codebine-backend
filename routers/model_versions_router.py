@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from auth_dependency import require_admin
 from database import get_db
@@ -12,7 +12,6 @@ from schemas.model_version_schema import (
 )
 from services.current_user import get_current_user
 from services.model_version_service import ModelVersionService
-from services.risk_run import pick_model
 
 router = APIRouter(prefix="/analytics/models", tags=["Model Versions Operations"])
 
@@ -34,10 +33,7 @@ def get_active_model_version(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    try:
-        return pick_model(db)
-    except LookupError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return ModelVersionService(db).fetch_active()
 
 
 @router.get("/{model_version_id}", response_model=ModelVersionResponse)
@@ -57,10 +53,4 @@ def predict_from_rainfall(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    service = ModelVersionService(db)
-    result = service.predict_from_rainfall(
-        model_version_id,
-        payload.sector_id,
-        [obs.model_dump() for obs in payload.rainfall_observations],
-    )
-    return result
+    return ModelVersionService(db).predict_from_request(model_version_id, payload)

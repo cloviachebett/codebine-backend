@@ -6,7 +6,8 @@ from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from repositories.model_version_repository import model_version_repository
-from models._enums import RiskLevel
+from models._enums import ModelStatus, RiskLevel
+from models.model_versions import ModelVersion
 from models.risk_inferences import RiskInference
 from models.prediction_features import PredictionFeature
 from services import storage
@@ -81,6 +82,43 @@ class ModelVersionService:
             recall=payload_data["recall"],
             f1_score=payload_data["f1_score"],
             model_status=payload_data["model_status"],
+        )
+
+    def active_model(self) -> ModelVersion:
+        wanted = os.getenv("RISK_MODEL_VERSION_ID")
+        if wanted:
+            model = self.db.get(ModelVersion, uuid.UUID(wanted))
+            if model is None:
+                raise LookupError(f"RISK_MODEL_VERSION_ID {wanted} was not found")
+            return model
+        for model_status in (
+            ModelStatus.DEPLOYED,
+            ModelStatus.READY,
+            ModelStatus.TRAINING,
+        ):
+            model = (
+                self.db.query(ModelVersion)
+                .filter(ModelVersion.model_status == model_status)
+                .order_by(ModelVersion.created_at.desc())
+                .first()
+            )
+            if model is not None:
+                return model
+        raise LookupError("No model version is registered")
+
+    def fetch_active(self) -> ModelVersion:
+        try:
+            return self.active_model()
+        except LookupError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
+
+    def predict_from_request(self, model_version_id: uuid.UUID, payload):
+        return self.predict_from_rainfall(
+            model_version_id,
+            payload.sector_id,
+            [obs.model_dump() for obs in payload.rainfall_observations],
         )
 
     def fetch_version(self, model_version_id: uuid.UUID):

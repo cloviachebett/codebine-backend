@@ -9,8 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models._enums import ModelStatus, RiskLevel
-from models.model_versions import ModelVersion
+from models._enums import RiskLevel
 from models.rainfall_matrices import RainfallMatrix
 from models.risk_inferences import RiskInference
 from models.sectors import Sector
@@ -41,29 +40,6 @@ def _start_of_today() -> datetime:
     return datetime.combine(
         datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc
     )
-
-
-def pick_model(db: Session) -> ModelVersion:
-    wanted = os.getenv("RISK_MODEL_VERSION_ID")
-    if wanted:
-        model = db.get(ModelVersion, uuid.UUID(wanted))
-        if model is None:
-            raise LookupError(f"RISK_MODEL_VERSION_ID {wanted} was not found")
-        return model
-    for model_status in (
-        ModelStatus.DEPLOYED,
-        ModelStatus.READY,
-        ModelStatus.TRAINING,
-    ):
-        model = (
-            db.query(ModelVersion)
-            .filter(ModelVersion.model_status == model_status)
-            .order_by(ModelVersion.created_at.desc())
-            .first()
-        )
-        if model is not None:
-            return model
-    raise LookupError("No model version is registered")
 
 
 def latest_rainfall(db: Session) -> dict[uuid.UUID, RainfallMatrix]:
@@ -123,7 +99,7 @@ def run_daily_risk(db: Session, sync: bool = True, rainfall=None) -> dict[str, A
     if sync:
         summary["rainfall"] = _sync_rainfall(db, rainfall)
 
-    model = pick_model(db)
+    model = ModelVersionService(db).active_model()
     rain = latest_rainfall(db)
     done_today = _predicted_today(db, model.model_version_id)
     predictor = ModelVersionService(db)
