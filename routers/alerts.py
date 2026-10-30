@@ -3,8 +3,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from auth_dependency import require_admin
 from database import get_db
 from models._enums import AlertStatus
+from models.users import User
 from schemas.alerts import AlertCreate, AlertRead
 from services import alerts as alert_service
 
@@ -12,7 +14,11 @@ router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
 
 
 @router.post("", response_model=AlertRead, status_code=status.HTTP_201_CREATED)
-def create_alert(payload: AlertCreate, db: Session = Depends(get_db)):
+def create_alert(
+    payload: AlertCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
     return alert_service.create_alert(db, payload)
 
 

@@ -1,6 +1,7 @@
 import os
 import uuid
 import joblib
+from decimal import Decimal
 from datetime import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -8,6 +9,7 @@ from repositories.model_version_repository import model_version_repository
 from models._enums import RiskLevel
 from models.risk_inferences import RiskInference
 from models.prediction_features import PredictionFeature
+from services import storage
 
 
 class ModelVersionService:
@@ -31,7 +33,15 @@ class ModelVersionService:
         # Load a model from disk, resolving paths safely inside the project.
         pkl_path = str(model_record.model_path)
 
-        if os.path.isabs(pkl_path) and pkl_path.startswith("/assets/"):
+        if pkl_path.startswith("s3://"):
+            try:
+                pkl_path = storage.download_model(pkl_path)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Could not download the model from S3: {e}",
+                )
+        elif os.path.isabs(pkl_path) and pkl_path.startswith("/assets/"):
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             pkl_path = os.path.join(project_root, pkl_path.lstrip("/"))
         elif not os.path.isabs(pkl_path):
@@ -166,12 +176,30 @@ class ModelVersionService:
             else:
                 value = latest_obs.get(name)
                 if value is None:
+                    value = self._sector_feature(sector, name)
+                if value is None:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Missing feature value for {name}",
                     )
                 row.append(value)
         return row
+
+    @staticmethod
+    def _sector_feature(sector, name: str):
+        soil = sector.soil_features if isinstance(sector.soil_features, dict) else {}
+        if name in soil:
+            return soil[name]
+        if name.startswith("soil_") and name[5:] in soil:
+            return soil[name[5:]]
+        if name in sector.__table__.columns.keys():
+            value = getattr(sector, name)
+            if hasattr(value, "value"):
+                return value.value
+            if isinstance(value, Decimal):
+                return float(value)
+            return value
+        return None
 
     def calculate_prediction(
         self, model_version_id: uuid.UUID, feature_matrix: list
@@ -252,6 +280,7 @@ class ModelVersionService:
         model = self._get_model(model_record)
 
         feature_row = self._build_feature_row(model, sector, latest_obs)
+        model_inputs = dict(zip(model.feature_names_in_, feature_row))
         risk_score = self.calculate_prediction(model_version_id, [feature_row])
 
         inference = RiskInference(
@@ -269,6 +298,7 @@ class ModelVersionService:
                 "rainfall_observations": rainfall_observations,
                 "sector_id": str(sector_id),
                 "landcover": sector.land_cover_class,
+                "model_inputs": model_inputs,
             },
         )
         self.db.add(feature_snapshot)
